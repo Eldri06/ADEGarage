@@ -1,66 +1,125 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+<div align="center">
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+# 🔧 ADE Garage
 
-## About Laravel
+**Your one-stop online shop for garage essentials.**
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+A full-stack web application built with Laravel 9 — featuring product browsing, cart management, order tracking, and a dedicated admin dashboard.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-777BB4?style=for-the-badge&logo=php&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+</div>
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 📖 About
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+**ADE Garage** is a Laravel-based e-commerce web application that lets customers browse products, manage their cart, and place orders — while admins handle inventory, order statuses, and user management from a dedicated dashboard. Authentication supports both traditional login and Google OAuth.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 2000 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## ✨ Features
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+**🛍️ Product Browsing**
+- View all available products
+- Individual product detail pages
+- Admin-managed product listings (add, update, delete)
 
-### Premium Partners
+**🛒 Cart System**
+- Add, update, and remove cart items
+- Works for both guests and logged-in users
+- Full cart clear functionality
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[OP.GG](https://op.gg)**
-- **[WebReinvent](https://webreinvent.com/?utm_source=laravel&utm_medium=github&utm_campaign=patreon-sponsors)**
-- **[Lendio](https://lendio.com)**
+**📦 Order Management**
+- Place orders from cart
+- View personal order history
+- Cancel pending orders
+- Admin can view all orders and update their status
 
-## Contributing
+**👤 User Accounts**
+- Register and log in with email/password
+- Google OAuth login support
+- Profile management (personal details + password update)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**🔐 Admin Dashboard**
+- Role-based access with admin middleware
+- Manage products, orders, and users
+- Separate admin views and controls
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 💻 Prerequisites
 
-## Security Vulnerabilities
+Make sure you have the following installed:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- PHP >= 8.0.2
+- Composer
+- Node.js & npm
+- MySQL or any supported database
+- Git
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## 🚀 Getting Started
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Eldri06/ADEGarage.git
+```
+
+2. Navigate into the project:
+```bash
+cd ade-garage
+```
+
+3. Install PHP dependencies:
+```bash
+composer install
+```
+
+4. Install frontend dependencies:
+```bash
+npm install
+```
+
+5. Copy the environment file and configure it:
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+6. Set up your database in `.env`, then run migrations:
+```bash
+php artisan migrate
+```
+
+7. Start the development server:
+```bash
+php artisan serve
+npm run dev
+```
+
+---
+
+## 🤝 Contributors
+
+| Name | Role | GitHub |
+|------|------|--------|
+| Karyll Mae Salipot | Frontend Developer | [@cykai](https://github.com/cykai) |
+| Kristina Melquery Marcojos | UI/UX Designer | [@__km070105__](https://github.com/__km070105__) |
+| Shayne Silagan | Frontend Developer | [@shaensil](https://github.com/shaensil) |
+| Eldrian Colinares | Backend Developer & Database | [@Eldri06](https://github.com/Eldri06) |
+| Junaica Layni | Backend Developer & Project Manager | [@nikss07](https://github.com/nikss07) |
+---
+
+## 📄 License
+
+This project was developed for academic purposes. All rights reserved by the ADE Garage team.
+
+<br>
+
+<div align="center">
+  <sub>Built with 🔧 and ☕ by the ADE Garage Team</sub>
+</div>
