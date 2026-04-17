@@ -4,7 +4,7 @@
 
 **Your one-stop online shop for garage essentials.**
 
-A full-stack web application built with Laravel 9 — featuring product browsing, cart management, order tracking, and a dedicated admin dashboard.
+A full-stack web application built with Laravel 9 — featuring product browsing, cart management, order tracking, and a dedicated admin dashboard with Machin Learning features.
 
 ![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-777BB4?style=for-the-badge&logo=php&logoColor=white)
