@@ -54,7 +54,7 @@ class SupabaseAuthService
             throw new \RuntimeException('Supabase Auth is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env');
         }
 
-        $request = Http::withHeaders([
+        $request = Http::withoutVerifying()->withHeaders([
             'apikey' => $this->anonKey,
             'Authorization' => 'Bearer ' . ($bearer ?: $this->anonKey),
         ])->acceptJson();
