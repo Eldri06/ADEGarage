@@ -195,9 +195,9 @@
   <form id="loginForm" class="form-glass" autocomplete="on" method="POST" action="/login">
     @csrf
     <div class="mb-3">
-      <label class="form-label help-text">Username</label>
-      <input id="loginUsername" name="username" type="text" class="form-control" placeholder="Enter your username" required aria-required="true" />
-      <div class="invalid-feedback">Please enter your username</div>
+      <label class="form-label help-text">Email</label>
+      <input id="loginEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required aria-required="true" />
+      <div class="invalid-feedback">Please enter your email</div>
     </div>
             <div class="mb-3 input-with-icon">
       <label class="form-label help-text">Password</label>
