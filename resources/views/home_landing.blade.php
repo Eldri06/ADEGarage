@@ -221,7 +221,6 @@
 
           <div class="micro">Or continue with</div>
           <div class="social-row" aria-hidden="false">
-            <div class="social" title="Continue with Google"><a href="{{ route('oauth.google') }}"><img src="https://www.svgrepo.com/show/355037/google.svg" width="22" alt="Google"></a></div>
             <div class="social" title="Continue with Apple"><i class="bi bi-apple" style="font-size:20px;"></i></div>
             <div class="social" title="Continue with GCash"><i class="bi bi-wallet2" style="font-size:18px;"></i></div>
           </div>
@@ -269,7 +268,6 @@
   </form>
           <div class="micro">Or continue an account?</div>
           <div class="social-row">
-            <div class="social" title="Google"><a href="{{ route('oauth.google') }}"><img src="https://www.svgrepo.com/show/355037/google.svg" width="22" alt="Google"></div></a>
             <div class="social" title="Apple"><i class="bi bi-apple" style="font-size:20px;"></i></div>
             <div class="social" title="GCash"><i class="bi bi-wallet2" style="font-size:18px;"></i></div>
           </div>
