@@ -56,7 +56,7 @@ Make sure you have the following installed:
 
 - PHP >= 8.0.2
 - Composer
-- Node.js & npm
+- Node.js and npm
 - MySQL or any supported database
 - Git
 
