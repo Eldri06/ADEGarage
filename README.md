@@ -4,7 +4,7 @@
 
 **Your one-stop online shop for garage essentials.**
 
-A full-stack web application built with Laravel 9, featuring product browsing, cart management, order tracking, and a dedicated admin dashboard with Machine Learning features such as XGBooost and Clustering.
+A full-stack web application built with Laravel 9, featuring product browsing, cart management, order tracking, and a dedicated admin dashboard with Machine Learning features such as Linear Regression and Clustering.
 
 ![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-777BB4?style=for-the-badge&logo=php&logoColor=white)
@@ -56,7 +56,7 @@ Make sure you have the following installed:
 
 - PHP >= 8.0.2
 - Composer
-- Node.js & npm
+- Node.js and npm
 - MySQL or any supported database
 - Git
 
