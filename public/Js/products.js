@@ -1,196 +1,234 @@
-// Fetch and display products from database
+window.productsData = [];
+
+function normalizeValue(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatLabel(value) {
+  const cleaned = String(value ?? '').trim();
+  return cleaned || 'Uncategorized';
+}
+
+function buildFilterMap(products, field) {
+  const uniqueValues = new Map();
+
+  products.forEach((product) => {
+    const rawValue = String(product?.[field] ?? '').trim();
+    const key = normalizeValue(rawValue);
+    if (key && !uniqueValues.has(key)) {
+      uniqueValues.set(key, formatLabel(rawValue));
+    }
+  });
+
+  return [...uniqueValues.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([key, label]) => ({ key, label }));
+}
+
+function capitalizeFirst(str) {
+  const value = String(str ?? '').trim();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+}
+
+function getMappedProductImage(product) {
+  const name = normalizeValue(product.name);
+  const brand = normalizeValue(product.brand);
+  const category = normalizeValue(product.category);
+
+  if (name.includes('xrm 110 cowling / headlight case') && name.includes('red')) {
+    return '/images/products/xrm110_headlight_case_red.png';
+  }
+
+  if (brand === 'honda' && category.includes('fender')) {
+    return '/images/products/honda_yellow_fender.png';
+  }
+
+  if (brand === 'yamaha' && (category.includes('panel') || category.includes('cover') || category.includes('cowling'))) {
+    return '/images/products/yamaha_yellow_cover.png';
+  }
+
+  if (name.includes('cam chain') || name.includes('slipper')) {
+    return '/images/products/cam_chain_slipper.png';
+  }
+
+  if (name.includes('bolt') && (name.includes('hinge') || name.includes('seat'))) {
+    return '/images/products/bolt_seat_hinge_kpg900.png';
+  }
+
+  return null;
+}
+
+function getProductImageUrl(product) {
+  if (product.image_url) {
+    return product.image_url;
+  }
+
+  if (product.image) {
+    if (/^https?:\/\//i.test(product.image)) {
+      return product.image;
+    }
+
+    if (product.image.startsWith('/')) {
+      return product.image;
+    }
+
+    return `/storage/${product.image}`;
+  }
+
+  const mappedImage = getMappedProductImage(product);
+  if (mappedImage) {
+    return mappedImage;
+  }
+
+  const category = normalizeValue(product.category);
+  if (category.includes('brake')) return '/images/products/category_brake.png';
+  if (category.includes('wheel') || category.includes('tire')) return '/images/products/category_wheel.png';
+  if (category.includes('engine') || category.includes('drive train')) return '/images/products/category_engine.png';
+  if (category.includes('filter')) return '/images/products/category_filter.png';
+  if (category.includes('lighting')) return '/images/products/category_lighting.png';
+  if (category.includes('cowling') || category.includes('panel') || category.includes('fender')) return '/images/products/category_cowling.png';
+  if (category.includes('electrical') || category.includes('battery')) return '/images/products/category_electrical.png';
+  if (category.includes('exhaust')) return '/images/products/category_exhaust.png';
+  if (category.includes('suspension')) return '/images/products/category_suspension.png';
+  if (category.includes('transmission')) return '/images/products/category_transmission.png';
+  if (category.includes('clutch')) return '/images/products/category_clutch.png';
+
+  const initials = String(product.name ?? 'PR').slice(0, 2).toUpperCase();
+  return `https://via.placeholder.com/600x400/1a2332/1ee0ff?text=${encodeURIComponent(initials)}`;
+}
+
+function renderProductGrid(products) {
+  const productGrid = document.getElementById('productGrid');
+  if (!productGrid) {
+    return;
+  }
+
+  if (!products.length) {
+    productGrid.innerHTML = '';
+    return;
+  }
+
+  productGrid.innerHTML = products.map((product, index) => {
+    const imageUrl = getProductImageUrl(product);
+    const category = formatLabel(product.category);
+    const brand = formatLabel(product.brand);
+    const categoryKey = normalizeValue(product.category);
+    const brandKey = normalizeValue(product.brand);
+    const searchable = [
+      product.name,
+      product.brand,
+      product.category,
+      Array.isArray(product.models) ? product.models.join(' ') : '',
+    ].join(' ');
+    const popularTiers = ['fast-moving', 'premium', 'star'];
+    const showBadge = popularTiers.includes(normalizeValue(product.ml_tier));
+
+    return `
+      <div class="col-lg-4 col-md-6 product-item"
+        data-product-id="${escapeHtml(product.id)}"
+        data-product-index="${index}"
+        data-category="${escapeHtml(category)}"
+        data-category-key="${escapeHtml(categoryKey)}"
+        data-brand="${escapeHtml(brand)}"
+        data-brand-key="${escapeHtml(brandKey)}"
+        data-price="${escapeHtml(product.price)}"
+        data-stock="${escapeHtml(product.stock)}"
+        data-search="${escapeHtml(searchable)}">
+        <div class="product-card position-relative" data-product-index="${index}">
+          ${showBadge ? '<div class="ai-badge">POPULAR CHOICE</div>' : ''}
+          <img class="product-image" src="${imageUrl}" alt="${escapeHtml(product.name)}">
+          <div class="product-title">${escapeHtml(product.name)}</div>
+          <div class="product-details">
+            <div><strong>Brand:</strong> ${escapeHtml(capitalizeFirst(brand))}</div>
+            <div><strong>Category:</strong> ${escapeHtml(category)}</div>
+            <div><strong>Price:</strong> ₱${Number(product.price || 0).toLocaleString()}</div>
+          </div>
+          <div class="product-buttons">
+            <button class="btn-buy-now btn btn-outline-light"><i class="fa-solid fa-shopping-bag"></i> Buy Now</button>
+            <button class="btn-add-cart btn"><i class="fa-solid fa-cart-plus"></i> Add</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function populateFilterOptions(products) {
+  const categories = buildFilterMap(products, 'category');
+  const brands = buildFilterMap(products, 'brand');
+
+  const categoryContent = document.getElementById('category-content');
+  if (categoryContent) {
+    categoryContent.innerHTML = categories.map((category, index) => `
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="cat_${index}" value="${escapeHtml(category.key)}" data-filter-type="category">
+        <label class="form-check-label" for="cat_${index}">${escapeHtml(category.label)}</label>
+      </div>
+    `).join('');
+  }
+
+  const brandContent = document.getElementById('brand-content');
+  if (brandContent) {
+    brandContent.innerHTML = brands.map((brand, index) => `
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="brand_${index}" value="${escapeHtml(brand.key)}" data-filter-type="brand">
+        <label class="form-check-label" for="brand_${index}">${escapeHtml(brand.label)}</label>
+      </div>
+    `).join('');
+  }
+}
+
+function syncPriceSlider(products) {
+  const priceSlider = document.getElementById('priceRange');
+  const currentPrice = document.getElementById('currentPrice');
+  if (!priceSlider) {
+    return;
+  }
+
+  const highestPrice = Math.max(...products.map((product) => Number(product.price) || 0), 0);
+  const maxAllowedPrice = Math.max(50, Math.ceil(highestPrice));
+
+  priceSlider.max = maxAllowedPrice;
+  priceSlider.value = maxAllowedPrice;
+
+  if (currentPrice) {
+    currentPrice.textContent = '₱' + maxAllowedPrice.toLocaleString();
+  }
+}
+
 async function loadProductsFromDatabase() {
   try {
     const response = await fetch('/api/products');
+    if (!response.ok) {
+      throw new Error(`Failed to load products: ${response.status}`);
+    }
+
     const products = await response.json();
-    
-    console.log('Loaded products from database:', products);
-    
-    // Update the product grid with database products
-    const productGrid = document.getElementById('productGrid');
-    if (productGrid && products.length > 0) {
-      productGrid.innerHTML = products.map(product => {
-        const imageUrl = product.image ? `/storage/${product.image}` : `https://via.placeholder.com/900x600/1a2332/1ee0ff?text=${product.name.substring(0, 2)}`;
-        const models = product.models ? JSON.parse(product.models) : [];
-        const modelsString = models.length > 0 ? models.join(', ') : 'Universal';
-        
-        return `
-          <div class="col-lg-4 col-md-6 product-item" 
-               data-product-id="${product.id}"
-               data-category="${product.category}" 
-               data-brand="${product.brand}" 
-               data-price="${product.price}" 
-               data-models='${JSON.stringify(models)}' 
-               data-stock="${product.stock}"
-               data-full-description="${product.full_description || ''}"
-               data-variations='${product.variations ? JSON.stringify(product.variations) : '{}'}'
-               data-specifications='${product.specifications ? JSON.stringify(product.specifications) : '{}'}'>
-            <div class="product-card position-relative">
-              ${product.ml_tier === 'High Demand' || product.ml_tier === 'High Value' ? '<div class="ai-badge">⭐ AI RECOMMENDED</div>' : ''}
-              <img class="product-image" src="${imageUrl}" alt="${product.name}">
-              <div class="product-title">${product.name}</div>
-              <div class="product-details">
-                <div><strong>Brand:</strong> ${capitalizeFirst(product.brand)}</div>
-                <div><strong>Compatibility:</strong> ${modelsString}</div>
-                <div><strong>Price:</strong> ₱${parseFloat(product.price).toLocaleString()}</div>
-              </div>
-              <div class="product-buttons">
-                <button class="btn-buy-now btn btn-outline-light"><i class="fa-solid fa-shopping-bag"></i> Buy Now</button>
-                <button class="btn-add-cart btn"><i class="fa-solid fa-cart-plus"></i> Add</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-      
-      // Re-attach event listeners after products are loaded
-      attachProductEventListeners();
-      
-      // Re-run filter to show all products
-      if (typeof filterProducts === 'function') {
-        console.log('Re-filtering products after database load...');
-        filterProducts();
-      }
+    window.productsData = Array.isArray(products) ? products : [];
+
+    console.log('Loaded products from database:', window.productsData.length);
+
+    renderProductGrid(window.productsData);
+    populateFilterOptions(window.productsData);
+    syncPriceSlider(window.productsData);
+
+    if (typeof filterProducts === 'function') {
+      filterProducts();
     }
   } catch (error) {
     console.error('Error loading products:', error);
   }
 }
 
-/**
- * Attach event listeners to product buttons
- */
-function attachProductEventListeners() {
-  console.log('Attaching event listeners to product buttons...');
-  
-  // Remove old listeners and attach new ones
-  document.querySelectorAll('.btn-buy-now').forEach(btn => {
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      console.log('Buy Now clicked');
-      const card = this.closest('.product-card');
-      const productItem = this.closest('.product-item');
-      if (typeof openProductModal === 'function') {
-        openProductModal(card, productItem, 'buyNow');
-      } else {
-        console.error('openProductModal function not found');
-      }
-    });
-  });
-
-  document.querySelectorAll('.btn-add-cart').forEach(btn => {
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('=== Add to Cart Button Clicked ===');
-      
-      const card = this.closest('.product-card');
-      const productItem = this.closest('.product-item');
-      console.log('Card found:', !!card);
-      console.log('Product Item found:', !!productItem);
-      console.log('window.openProductModal exists:', typeof window.openProductModal);
-      
-      if (typeof window.openProductModal === 'function') {
-        console.log('Calling window.openProductModal...');
-        try {
-          window.openProductModal(card, productItem, 'addToCart');
-          console.log('Modal function called successfully');
-        } catch (error) {
-          console.error('Error calling modal:', error);
-          alert('Error: ' + error.message);
-        }
-      } else {
-        console.error('window.openProductModal is not a function!');
-        alert('Modal function not found. Type: ' + typeof window.openProductModal);
-      }
-    });
-  });
-  
-  console.log('Event listeners attached to', document.querySelectorAll('.btn-add-cart').length, 'buttons');
-}
-
-function capitalizeFirst(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-/**
- * Buy now - add to cart and go to checkout
- */
-async function buyNow(productId) {
-  await addToCart(productId);
-  // Navigate to cart/checkout page
-  if (typeof showCheckoutPage === 'function') {
-    showCheckoutPage();
-    if (typeof goToStep === 'function') {
-      goToStep(2);
-    }
-  }
-}
-
-/**
- * Load recommended products
- */
-async function loadRecommendedProducts() {
-  try {
-    const response = await fetch('/api/products');
-    const products = await response.json();
-    
-    // Get random products for recommendations (or you can filter by category later)
-    const shuffled = products.sort(() => 0.5 - Math.random());
-    const recommended = shuffled.slice(0, 8); // Get 8 random products
-    
-    const recommendationsGrid = document.getElementById('recommendationsGrid');
-    if (recommendationsGrid && recommended.length > 0) {
-      recommendationsGrid.innerHTML = recommended.map((product, index) => {
-        const imageUrl = product.image ? `/storage/${product.image}` : `https://via.placeholder.com/900x600/1a2332/1ee0ff?text=${product.name.substring(0, 2)}`;
-        const isAIRecommended = index % 3 === 0; // Mark every 3rd as AI recommended
-        
-        return `
-          <div class="recommendation-card-horizontal" 
-               data-product-id="${product.id}"
-               data-product-name="${product.name}" 
-               data-product-price="${product.price}" 
-               data-product-brand="${product.brand}" 
-               data-product-stock="${product.stock}" 
-               data-product-image="${imageUrl}">
-            ${isAIRecommended ? '<div class="ai-badge">AI RECOMMENDED</div>' : ''}
-            <img class="recommendation-image-horizontal" src="${imageUrl}" alt="${product.name}">
-            <div class="recommendation-title-horizontal">${product.name.toUpperCase()}</div>
-            <div class="product-details">
-              <div><strong>Brand:</strong> ${capitalizeFirst(product.brand)}</div>
-              <div><strong>Price:</strong> ₱${parseFloat(product.price).toLocaleString()}</div>
-            </div>
-          </div>
-        `;
-      }).join('');
-      
-      // Re-attach event listeners for recommendation cards
-      attachRecommendationEventListeners();
-    }
-  } catch (error) {
-    console.error('Error loading recommended products:', error);
-  }
-}
-
-/**
- * Attach event listeners to recommendation cards
- */
-function attachRecommendationEventListeners() {
-  document.querySelectorAll('.recommendation-card-horizontal').forEach(card => {
-    card.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('Recommendation clicked');
-      if (typeof openRecommendationModal === 'function') {
-        openRecommendationModal(this);
-      } else {
-        console.error('openRecommendationModal function not found');
-      }
-    });
-  });
-}
-
-// Load products when page loads
 document.addEventListener('DOMContentLoaded', () => {
   loadProductsFromDatabase();
-  loadRecommendedProducts();
 });

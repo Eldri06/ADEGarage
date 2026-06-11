@@ -12,134 +12,123 @@ let currentQuantity = 1;
     const shippingCost = 150;
     let isEditMode = false;
 
+    function normalizeFilterValue(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
     // Global filter function - accessible from anywhere
     function getCheckedFilters(type){
-      return Array.from(document.querySelectorAll(`input[data-filter-type="${type}"]:checked`)).map(i => i.id.toLowerCase());
+      return Array.from(document.querySelectorAll(`input[data-filter-type="${type}"]:checked`))
+        .map(i => normalizeFilterValue(i.value))
+        .filter(Boolean);
+    }
+
+    function clearAllFilters() {
+      document.querySelectorAll('input[data-filter-type]').forEach(cb => cb.checked = false);
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) searchInput.value = '';
+      const priceSlider = document.getElementById('priceRange');
+      const currentPrice = document.getElementById('currentPrice');
+      if (priceSlider) {
+        priceSlider.value = priceSlider.max;
+        if (currentPrice) currentPrice.textContent = '\u20b1' + Number(priceSlider.max).toLocaleString();
+      }
+      filterProducts();
     }
 
     function filterProducts(){
       const productItems = Array.from(document.querySelectorAll('.product-item'));
       const priceSlider = document.getElementById('priceRange');
       const searchInput = document.getElementById('searchInput');
-      const modelSelect = document.getElementById('modelSelect');
-
       const checkedCategories = getCheckedFilters('category');
       const checkedBrands = getCheckedFilters('brand');
-      const maxPrice = Number(priceSlider.value) || Infinity;
-      const searchTerm = (searchInput.value||'').trim().toLowerCase();
-      const selectedModel = (modelSelect.value||'').toLowerCase();
+      const maxPrice = Number(priceSlider?.value) || Infinity;
+      const searchTerm = normalizeFilterValue(searchInput?.value || '');
+      const noProductsMessage = document.getElementById('noProductsMessage');
+      const productCountLabel = document.getElementById('productCountLabel');
 
       let visibleCount = 0;
 
       productItems.forEach((el) => {
-        const category = (el.dataset.category || '').toLowerCase();
-        const brand = (el.dataset.brand || '').toLowerCase();
+        const category = normalizeFilterValue(el.dataset.categoryKey || el.dataset.category);
+        const brand = normalizeFilterValue(el.dataset.brandKey || el.dataset.brand);
         const price = Number(el.dataset.price) || 0;
-        const models = JSON.parse(el.getAttribute('data-models') || '[]').map(m => String(m).toLowerCase());
-
         const okCategory = checkedCategories.length === 0 || checkedCategories.includes(category);
         const okBrand = checkedBrands.length === 0 || checkedBrands.includes(brand);
         const okPrice = !maxPrice || price <= maxPrice;
-        const okModel = !selectedModel || models.includes(selectedModel);
 
-        const title = el.querySelector('.product-title')?.textContent.toLowerCase() || '';
-        const details = el.querySelector('.product-details')?.textContent.toLowerCase() || '';
-        const okSearch = !searchTerm || title.includes(searchTerm) || details.includes(searchTerm);
+        const title = normalizeFilterValue(el.querySelector('.product-title')?.textContent);
+        const details = normalizeFilterValue(el.querySelector('.product-details')?.textContent);
+        const searchBlob = normalizeFilterValue(el.dataset.search);
+        const okSearch = !searchTerm
+          || title.includes(searchTerm)
+          || details.includes(searchTerm)
+          || searchBlob.includes(searchTerm);
 
-        const show = okCategory && okBrand && okPrice && okModel && okSearch;
+        const show = okCategory && okBrand && okPrice && okSearch;
         el.style.display = show ? '' : 'none';
         if (show) visibleCount++;
       });
+
+      if (productCountLabel) {
+        productCountLabel.textContent = `Showing ${visibleCount} of ${productItems.length} products`;
+      }
+
+      if (noProductsMessage) {
+        noProductsMessage.style.display = visibleCount === 0 ? 'block' : 'none';
+      }
 
       console.log(`Filtering: ${visibleCount} products visible`);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      const productItems = Array.from(document.querySelectorAll('.product-item'));
-      const priceSlider = document.getElementById('priceRange');
-      const currentPrice = document.getElementById('currentPrice');
-      const searchInput = document.getElementById('searchInput');
-      const modelSelect = document.getElementById('modelSelect');
-      const cartCountSpan = document.getElementById('cartCount');
-      const toastRoot = document.getElementById('toastRoot');
-      
-      // Username is already set by Blade template, no need to override
-      const usernameDisplay = document.getElementById("usernameDisplay");
 
-      if (currentPrice && priceSlider) {
-        currentPrice.textContent = '₱' + Number(priceSlider.value || 15000).toLocaleString();
+      // ── EVENT DELEGATION: catches dynamically-created checkboxes ──────────────
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) {
+        sidebar.addEventListener('change', function(e) {
+          const cb = e.target;
+          if (!cb.matches('input[type="checkbox"][data-filter-type]')) return;
+
+          filterProducts();
+        });
       }
-
-      // Category filter - single selection
-      document.querySelectorAll('input[type="checkbox"][data-filter-type="category"]').forEach(cb => {
-        cb.addEventListener('change', function() {
-          console.log('Category changed:', this.id, this.checked);
-          if (this.checked) {
-            document.querySelectorAll('input[type="checkbox"][data-filter-type="category"]').forEach(otherCb => {
-              if (otherCb !== this) {
-                otherCb.checked = false;
-              }
-            });
-          }
-          filterProducts();
-        });
-      });
-
-      // Brand filter - multiple selection
-      document.querySelectorAll('input[type="checkbox"][data-filter-type="brand"]').forEach(cb => {
-        cb.addEventListener('change', function() {
-          console.log('Brand changed:', this.id, this.checked);
-          filterProducts();
-        });
-      });
 
       // Price slider
-      if (priceSlider) {
-        priceSlider.addEventListener('input', function () {
-          console.log('Price changed:', this.value);
-          if (currentPrice) {
-            currentPrice.textContent = '₱' + Number(this.value).toLocaleString();
-          }
-          filterProducts();
-        });
-      }
-
-      // Model compatibility
-      if (modelSelect) {
-        modelSelect.addEventListener('change', function() {
-          console.log('Model changed:', this.value);
-          filterProducts();
-        });
-      }
+      document.addEventListener('input', function(e) {
+        if (e.target.id !== 'priceRange') return;
+        const currentPrice = document.getElementById('currentPrice');
+        if (currentPrice) currentPrice.textContent = '\u20b1' + Number(e.target.value).toLocaleString();
+        filterProducts();
+      });
 
       // Search with debounce
-      if (searchInput) {
-        let searchTimeout = null;
-        searchInput.addEventListener('input', function () {
-          console.log('Search input:', this.value);
-          clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(filterProducts, 160);
-        });
-      }
-
-      document.querySelectorAll('.btn-buy-now').forEach(btn => {
-        btn.addEventListener('click', function (e) {
-          e.preventDefault();
-          const card = this.closest('.product-card');
-          const productItem = this.closest('.product-item');
-          openProductModal(card, productItem, 'buyNow');
-        });
+      document.addEventListener('input', function(e) {
+        if (e.target.id !== 'searchInput') return;
+        clearTimeout(window._searchTimeout);
+        window._searchTimeout = setTimeout(filterProducts, 180);
       });
 
-      document.querySelectorAll('.btn-add-cart').forEach(btn => {
-        btn.addEventListener('click', function (e) {
+      // Buy Now / Add to Cart – delegated
+      document.addEventListener('click', function(e) {
+        const buyBtn = e.target.closest('.btn-buy-now');
+        const addBtn = e.target.closest('.btn-add-cart');
+        if (buyBtn) {
           e.preventDefault();
-          const card = this.closest('.product-card');
-          const productItem = this.closest('.product-item');
-          openProductModal(card, productItem, 'addToCart');
-        });
+          const card = buyBtn.closest('.product-card');
+          const productItem = buyBtn.closest('.product-item');
+          if (typeof openProductModal === 'function') openProductModal(card, productItem, 'buyNow');
+        } else if (addBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const card = addBtn.closest('.product-card');
+          const productItem = addBtn.closest('.product-item');
+          if (typeof window.openProductModal === 'function') window.openProductModal(card, productItem, 'addToCart');
+        }
       });
 
+      // Cart count
+      const cartCountSpan = document.getElementById('cartCount');
       document.querySelectorAll('.recommendation-card-horizontal').forEach(card => {
         card.addEventListener('click', function(e) {
           e.preventDefault();
@@ -171,7 +160,7 @@ let currentQuantity = 1;
 
       // Initial filter to show all products
       console.log('Initializing filters...');
-      console.log('Total products found:', productItems.length);
+      console.log('Total products found:', document.querySelectorAll('.product-item').length);
       filterProducts();
     });
 
@@ -185,12 +174,10 @@ let currentQuantity = 1;
     }
 
     function updateModalImage() {
-      const baseImageUrl = currentProductData.baseImageUrl;
       const productName = currentProductData.title;
-      
       const variationString = `${selectedVariations.size.imageSuffix}+${selectedVariations.material.imageSuffix}+${selectedVariations.color.imageSuffix}`;
-      
-      document.getElementById('modalProductImage').src = newImageUrl;
+
+      document.getElementById('modalProductImage').src = currentProductData.baseImageUrl;
       document.getElementById('modalProductImage').alt = `${productName} - ${variationString}`;
     }
 
@@ -200,10 +187,14 @@ let currentQuantity = 1;
       modalMode = mode;
       
       const title = card.querySelector('.product-title').textContent;
-      const stock = parseInt(productItem.dataset.stock) || 15;
-      const basePrice = parseInt(productItem.dataset.price) || 0;
+      const stock = parseInt(productItem.dataset.stock, 10) || 15;
+      const basePrice = parseFloat(productItem.dataset.price) || 0;
       const imageSrc = card.querySelector('.product-image').src;
-      const productId = parseInt(productItem.dataset.productId) || null;
+      const productId = parseInt(productItem.dataset.productId || card.dataset.productId, 10) || null;
+      const productIndex = parseInt(productItem.dataset.productIndex || card.dataset.productIndex, 10);
+      const selectedProduct = Array.isArray(window.productsData) && Number.isInteger(productIndex)
+        ? window.productsData[productIndex]
+        : null;
       
       console.log('openProductModal - Product data:', {
         productId: productId,
@@ -220,9 +211,9 @@ let currentQuantity = 1;
         price: basePrice,
         imageSrc: imageSrc,
         baseImageUrl: imageSrc,
-        fullDescription: productItem.dataset.fullDescription || null,
-        variations: productItem.dataset.variations || null,
-        specifications: productItem.dataset.specifications || null
+        fullDescription: selectedProduct?.full_description || selectedProduct?.description || null,
+        variations: selectedProduct?.variations || null,
+        specifications: selectedProduct?.specifications || null
       };
       
       console.log('currentProductData set to:', currentProductData);
@@ -272,7 +263,9 @@ let currentQuantity = 1;
       // Update specifications if available
       if (currentProductData.specifications) {
         try {
-          const specs = JSON.parse(currentProductData.specifications);
+          const specs = typeof currentProductData.specifications === 'string'
+            ? JSON.parse(currentProductData.specifications)
+            : currentProductData.specifications;
           updateSpecifications(specs);
         } catch (e) {
           console.error('Error parsing specifications:', e);
@@ -915,12 +908,6 @@ let currentQuantity = 1;
       if (priceSlider && currentPrice) {
         priceSlider.value = 15000;
         currentPrice.textContent = '₱15,000';
-      }
-      
-      // Reset model select
-      const modelSelect = document.getElementById('modelSelect');
-      if (modelSelect) {
-        modelSelect.value = '';
       }
       
       // Clear search input

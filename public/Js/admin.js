@@ -3,16 +3,7 @@
 //awa ubos naa koy gi comment
 //
 // PRODUCTS
-let productsData = [
-  { id: 1, name: "Carbon Fiber Brake Pads", category: "brakes", brand: "aeromax", price: 4500, stock: 45, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=BP", description: "High-performance carbon fiber brake pads for superior stopping power" },
-  { id: 2, name: "Performance Tires Set", category: "tires", brand: "speedtech", price: 12000, stock: 18, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=PT", description: "Premium performance tires designed for maximum grip and durability" },
-  { id: 3, name: "Turbo Kit Pro", category: "engine", brand: "motopro", price: 35000, stock: 8, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=TK", description: "Complete turbo kit for enhanced engine performance and power" },
-  { id: 4, name: "LED Headlight Kit", category: "accessories", brand: "aeromax", price: 3200, stock: 32, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=LH", description: "Bright LED headlight kit with easy installation and long lifespan" },
-  { id: 5, name: "Racing Exhaust System", category: "engine", brand: "speedtech", price: 18500, stock: 12, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=RE", description: "High-flow racing exhaust system for improved performance and sound" },
-  { id: 6, name: "Sport Suspension Kit", category: "accessories", brand: "motopro", price: 22000, stock: 6, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=SS", description: "Adjustable sport suspension kit for better handling and comfort" },
-  { id: 7, name: "Ceramic Brake Discs", category: "brakes", brand: "aeromax", price: 8900, stock: 25, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=BD", description: "Premium ceramic brake discs with excellent heat dissipation" },
-  { id: 8, name: "All-Season Tires", category: "tires", brand: "speedtech", price: 9500, stock: 0, image: "https://via.placeholder.com/50/1a2332/1ee0ff?text=AT", description: "Versatile all-season tires suitable for various weather conditions" },
-];
+let productsData = [];
 //ORDERS
 const ordersData = [
   {
@@ -126,6 +117,7 @@ const conversations = {
 let currentFilter = "all";
 let currentCategoryFilter = "all";
 let currentBrandFilter = "all";
+let currentSearchQuery = "";
 let currentOrderId = null;
 let currentConversationId = null;
 let currentEditingProductId = null;
@@ -133,15 +125,226 @@ let salesChart = null;
 let revenueChart = null;
 let customerChart = null;
 let nextProductId = 9; 
+let currentAdminSection = "dashboard";
+let dashboardSummaryData = {};
+let dashboardStatActionSection = "dashboard";
+
+function getActiveAdminSection() {
+  const activeSection = document.querySelector(".admin-section.active");
+  return activeSection?.id?.replace("section-", "") || currentAdminSection;
+}
+
+function setProductImagePreview(imageUrl = "") {
+  const preview = document.getElementById("imagePreview");
+  const previewImg = document.getElementById("previewImg");
+  const imageUrlField = document.getElementById("productImageUrl");
+
+  if (!preview || !previewImg || !imageUrlField) {
+    return;
+  }
+
+  if (imageUrl) {
+    previewImg.src = imageUrl;
+    imageUrlField.value = imageUrl;
+    preview.style.display = "block";
+    return;
+  }
+
+  previewImg.removeAttribute("src");
+  imageUrlField.value = "";
+  preview.style.display = "none";
+}
+
+function destroyAnalyticsCharts() {
+  [revenueChart, partTypeChart, brandMarginsChart, tierDistChart].forEach((chartInstance) => {
+    if (chartInstance && typeof chartInstance.destroy === "function") {
+      chartInstance.destroy();
+    }
+  });
+
+  revenueChart = null;
+  partTypeChart = null;
+  brandMarginsChart = null;
+  tierDistChart = null;
+}
+
+async function refreshAdminSection(sectionName = getActiveAdminSection()) {
+  currentAdminSection = sectionName;
+
+  if (sectionName === "dashboard") {
+    await loadOrders();
+    await loadDashboardData();
+    await loadDashboardStats();
+    await loadNotifications();
+    return;
+  }
+
+  if (sectionName === "products") {
+    await loadProductsData();
+    await loadDashboardStats();
+    return;
+  }
+
+  if (sectionName === "inventory") {
+    await loadProductsData();
+    loadInventoryData();
+    await loadDashboardStats();
+    return;
+  }
+
+  if (sectionName === "orders") {
+    await loadOrders();
+    await loadDashboardData();
+    await loadDashboardStats();
+    await loadNotifications();
+    return;
+  }
+
+  if (sectionName === "analytics") {
+    await loadProductsData();
+    loadAnalyticsData();
+    destroyAnalyticsCharts();
+    initializeCharts();
+  }
+}
+
+function normalizeAdminValue(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function escapeAdminHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getMappedProductImage(product) {
+  const name = normalizeAdminValue(product.name);
+  const brand = normalizeAdminValue(product.brand);
+  const category = normalizeAdminValue(product.category);
+
+  if (name.includes('xrm 110 cowling / headlight case') && name.includes('red')) {
+    return '/images/products/xrm110_headlight_case_red.png';
+  }
+
+  if (brand === 'honda' && category.includes('fender')) {
+    return '/images/products/honda_yellow_fender.png';
+  }
+
+  if (brand === 'yamaha' && (category.includes('panel') || category.includes('cover') || category.includes('cowling'))) {
+    return '/images/products/yamaha_yellow_cover.png';
+  }
+
+  if (name.includes('cam chain') || name.includes('slipper')) {
+    return '/images/products/cam_chain_slipper.png';
+  }
+
+  if (name.includes('bolt') && (name.includes('hinge') || name.includes('seat'))) {
+    return '/images/products/bolt_seat_hinge_kpg900.png';
+  }
+
+  return null;
+}
+
+function resolveProductImageUrl(productOrPath) {
+  if (productOrPath && typeof productOrPath === 'object') {
+    if (productOrPath.image_url) {
+      return productOrPath.image_url;
+    }
+
+    const image = productOrPath.image;
+    if (image && (/^https?:\/\//i.test(image) || image.startsWith('/'))) {
+      return image;
+    }
+
+    if (image) {
+      return `/storage/${image}`;
+    }
+
+    const mappedImage = getMappedProductImage(productOrPath);
+    if (mappedImage) {
+      return mappedImage;
+    }
+
+    return buildCategoryFallbackImage(productOrPath);
+  }
+
+  const image = String(productOrPath || '');
+  if (!image) {
+    return 'https://via.placeholder.com/60/1a2332/1ee0ff?text=NA';
+  }
+
+  if (/^https?:\/\//i.test(image) || image.startsWith('/')) {
+    return image;
+  }
+
+  return `/storage/${image}`;
+}
+
+function buildCategoryFallbackImage(product) {
+  const cat = normalizeAdminValue(product?.category);
+  if (cat.includes('brake')) return '/images/products/category_brake.png';
+  if (cat.includes('wheel') || cat.includes('tire')) return '/images/products/category_wheel.png';
+  if (cat.includes('engine') || cat.includes('drive train')) return '/images/products/category_engine.png';
+  if (cat.includes('filter')) return '/images/products/category_filter.png';
+  if (cat.includes('lighting')) return '/images/products/category_lighting.png';
+  if (cat.includes('cowling') || cat.includes('panel') || cat.includes('fender')) return '/images/products/category_cowling.png';
+  if (cat.includes('electrical') || cat.includes('battery')) return '/images/products/category_electrical.png';
+  if (cat.includes('exhaust')) return '/images/products/category_exhaust.png';
+  if (cat.includes('suspension')) return '/images/products/category_suspension.png';
+  if (cat.includes('transmission')) return '/images/products/category_transmission.png';
+  if (cat.includes('clutch')) return '/images/products/category_clutch.png';
+
+  const initials = String(product?.name || 'NA').substring(0, 2).toUpperCase();
+  return `https://via.placeholder.com/50/1a2332/1ee0ff?text=${encodeURIComponent(initials)}`;
+}
+
+function populateAdminProductFilters() {
+  const categoryFilter = document.getElementById('categoryFilter');
+  const brandFilter = document.getElementById('brandFilter');
+  const productCategory = document.getElementById('productCategory');
+  const productBrand = document.getElementById('productBrand');
+  const categories = [...new Set(productsData.map(product => String(product.category || '').trim()).filter(Boolean))].sort();
+  const brands = [...new Set(productsData.map(product => String(product.brand || '').trim()).filter(Boolean))].sort();
+
+  if (categoryFilter) {
+    categoryFilter.innerHTML = ['<option value="all">All Categories</option>']
+      .concat(categories.map(category => `<option value="${escapeAdminHtml(category)}">${escapeAdminHtml(capitalizeFirst(category))}</option>`))
+      .join('');
+    categoryFilter.value = currentCategoryFilter;
+  }
+
+  if (brandFilter) {
+    brandFilter.innerHTML = ['<option value="all">All Brands</option>']
+      .concat(brands.map(brand => `<option value="${escapeAdminHtml(brand)}">${escapeAdminHtml(capitalizeFirst(brand))}</option>`))
+      .join('');
+    brandFilter.value = currentBrandFilter;
+  }
+
+  if (productCategory) {
+    productCategory.innerHTML = categories
+      .map(category => `<option value="${escapeAdminHtml(category)}">${escapeAdminHtml(capitalizeFirst(category))}</option>`)
+      .join('');
+  }
+
+  if (productBrand) {
+    productBrand.innerHTML = brands
+      .map(brand => `<option value="${escapeAdminHtml(brand)}">${escapeAdminHtml(capitalizeFirst(brand))}</option>`)
+      .join('');
+  }
+}
 
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initializeSidebar();
+  initializeAdminSearch();
   initializeNotifications();
   initializeMessages();
-  loadOrders();
-  loadDashboardData();
-  loadProductsData();
+  await refreshAdminSection("dashboard");
+  await loadProductsData();
   loadInventoryData();
   loadAnalyticsData();
   initializeCharts();
@@ -179,7 +382,7 @@ function initializeSidebar() {
   });
 }
 
-function switchSection(sectionName) {
+async function switchSection(sectionName) {
   const sections = document.querySelectorAll(".admin-section");
   sections.forEach((section) => section.classList.remove("active"));
 
@@ -195,13 +398,9 @@ function switchSection(sectionName) {
   if (activeNav) {
     activeNav.classList.add("active");
   }
-  
-  // Load data for specific sections
-  if (sectionName === 'orders') {
-    loadOrders();
-  } else if (sectionName === 'dashboard') {
-    loadDashboardData();
-  }
+
+  await refreshAdminSection(sectionName);
+  applyAdminSearch();
 }
 
 async function loadProductsData() {
@@ -211,15 +410,16 @@ async function loadProductsData() {
   try {
     const response = await fetch('/api/admin/products');
     productsData = await response.json();
+    populateAdminProductFilters();
 
     let filteredProducts = productsData;
 
     if (currentCategoryFilter !== "all") {
-      filteredProducts = filteredProducts.filter(p => p.category === currentCategoryFilter);
+      filteredProducts = filteredProducts.filter(p => normalizeAdminValue(p.category) === normalizeAdminValue(currentCategoryFilter));
     }
 
     if (currentBrandFilter !== "all") {
-      filteredProducts = filteredProducts.filter(p => p.brand === currentBrandFilter);
+      filteredProducts = filteredProducts.filter(p => normalizeAdminValue(p.brand) === normalizeAdminValue(currentBrandFilter));
     }
 
     productsTable.innerHTML = filteredProducts.map(product => {
@@ -235,7 +435,7 @@ async function loadProductsData() {
         stockLabel = 'In Stock';
       }
       
-      const imageUrl = product.image ? `/storage/${product.image}` : `https://via.placeholder.com/50/1a2332/1ee0ff?text=${product.name.substring(0, 2).toUpperCase()}`;
+      const imageUrl = resolveProductImageUrl(product);
       
       let tierBadge = '<span class="status-badge" style="background:#1e2a38;color:#64748b;">Unclassified</span>';
       if (product.ml_tier === 'Premium') {
@@ -265,6 +465,7 @@ async function loadProductsData() {
     }).join("");
 
     updateProductCount();
+    applyAdminSearchToSection("products");
   } catch (error) {
     console.error('Error loading products:', error);
     showToast("error", "Failed to load products");
@@ -284,11 +485,10 @@ function filterProductsByBrand(brand) {
 function openProductModal(productId = null) {
   const modal = document.getElementById("productModal");
   const modalTitle = document.getElementById("productModalTitle");
-  const imagePreview = document.getElementById("imagePreview");
   const productImageInput = document.getElementById("productImage"); 
   
   if (productId) {
-    const product = productsData.find(p => p.id === productId);
+    const product = productsData.find(p => String(p.id) === String(productId));
     if (product) {
       modalTitle.textContent = "Edit Product";
       document.getElementById("productId").value = product.id;
@@ -299,12 +499,11 @@ function openProductModal(productId = null) {
       document.getElementById("productPrice").value = product.price;
       document.getElementById("productStock").value = product.stock;
       document.getElementById("productImageUrl").value = product.image; 
-      
+      document.getElementById("productFullDescription").value = product.full_description || "";
+      document.getElementById("productVariations").value = product.variations ? JSON.stringify(product.variations, null, 2) : "";
+      document.getElementById("productSpecifications").value = product.specifications ? JSON.stringify(product.specifications, null, 2) : "";
 
-      if (product.image) {
-        document.getElementById("previewImg").src = product.image;
-        imagePreview.style.display = 'block';
-      }
+      setProductImagePreview(resolveProductImageUrl(product));
       
       currentEditingProductId = productId;
     }
@@ -314,8 +513,7 @@ function openProductModal(productId = null) {
     modalTitle.textContent = "Add New Product";
     document.getElementById("productForm").reset();
     document.getElementById("productId").value = "";
-    imagePreview.style.display = 'none';
-    document.getElementById("productImageUrl").value = ""; 
+    setProductImagePreview();
     productImageInput.value = "";
   }
   
@@ -327,8 +525,7 @@ function closeProductModal() {
   const modal = document.getElementById("productModal");
   modal.classList.remove("active");
   document.getElementById("productForm").reset();
-  document.getElementById("imagePreview").style.display = 'none';
-  document.getElementById("productImageUrl").value = ""; 
+  setProductImagePreview();
   document.getElementById("productImage").value = ""; 
   currentEditingProductId = null;
 }
@@ -356,12 +553,29 @@ async function saveProduct() {
   formData.append('stock', stock);
   formData.append('status', 'active');
   
-  // Optional fields
   const fullDescription = document.getElementById("productFullDescription")?.value;
-  
-  // Build variations from predefined fields
-  const variations = buildVariationsFromFields();
-  const specifications = buildSpecificationsFromFields();
+  const variationsInput = document.getElementById("productVariations")?.value?.trim();
+  const specificationsInput = document.getElementById("productSpecifications")?.value?.trim();
+  let variations = null;
+  let specifications = null;
+
+  if (variationsInput) {
+    try {
+      variations = JSON.stringify(JSON.parse(variationsInput));
+    } catch (error) {
+      showToast("error", "Variations must be valid JSON");
+      return;
+    }
+  }
+
+  if (specificationsInput) {
+    try {
+      specifications = JSON.stringify(JSON.parse(specificationsInput));
+    } catch (error) {
+      showToast("error", "Specifications must be valid JSON");
+      return;
+    }
+  }
   
   if (fullDescription) formData.append('full_description', fullDescription);
   if (variations) formData.append('variations', variations);
@@ -399,8 +613,7 @@ async function saveProduct() {
       showToast("success", data.message);
       currentEditingProductId = null; // Reset the editing ID
       closeProductModal();
-      await loadProductsData();
-      await loadInventoryData();
+      await refreshAdminSection(getActiveAdminSection());
     } else {
       // Show detailed error message
       let errorMsg = data.message || "Failed to save product";
@@ -437,8 +650,7 @@ async function deleteProduct(productId) {
 
       if (data.success) {
         showToast("success", data.message);
-        await loadProductsData();
-        await loadInventoryData();
+        await refreshAdminSection(getActiveAdminSection());
       } else {
         showToast("error", "Failed to delete product");
       }
@@ -458,6 +670,107 @@ function updateProductCount() {
 
 function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function getAdminSearchQuery() {
+  return normalizeAdminValue(currentSearchQuery);
+}
+
+function matchesAdminSearch(text) {
+  const query = getAdminSearchQuery();
+  if (!query) {
+    return true;
+  }
+
+  return normalizeAdminValue(text).includes(query);
+}
+
+function applySearchToRows(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const rows = Array.from(container.querySelectorAll("tr"));
+  rows.forEach((row) => {
+    row.style.display = matchesAdminSearch(row.textContent) ? "" : "none";
+  });
+}
+
+function applySearchToCards(containerSelector) {
+  const cards = document.querySelectorAll(containerSelector);
+  cards.forEach((card) => {
+    card.style.display = matchesAdminSearch(card.textContent) ? "" : "none";
+  });
+}
+
+function applySearchToSettings() {
+  const cards = document.querySelectorAll("#section-settings .settings-grid .data-card");
+  cards.forEach((card) => {
+    card.style.display = matchesAdminSearch(card.textContent) ? "" : "none";
+  });
+}
+
+function applySearchToAnalytics() {
+  applySearchToRows("topProductsTable");
+  applySearchToRows("deadStockTable");
+}
+
+function applyAdminSearchToSection(sectionName = getActiveAdminSection()) {
+  if (sectionName === "dashboard") {
+    applySearchToRows("recentOrdersTable");
+    return;
+  }
+
+  if (sectionName === "products") {
+    applySearchToRows("productsTable");
+    return;
+  }
+
+  if (sectionName === "orders") {
+    applySearchToCards("#ordersGrid .order-card");
+    return;
+  }
+
+  if (sectionName === "inventory") {
+    applySearchToRows("inventoryTable");
+    return;
+  }
+
+  if (sectionName === "analytics") {
+    applySearchToAnalytics();
+    return;
+  }
+
+  if (sectionName === "settings") {
+    applySearchToSettings();
+  }
+}
+
+function applyAdminSearch() {
+  applyAdminSearchToSection(getActiveAdminSection());
+}
+
+function initializeAdminSearch() {
+  const searchInput = document.getElementById("adminSearch");
+  if (!searchInput) return;
+
+  searchInput.addEventListener("input", (event) => {
+    currentSearchQuery = event.target.value || "";
+    applyAdminSearch();
+  });
+}
+
+function formatCurrency(value) {
+  return `₱${Number(value || 0).toLocaleString()}`;
+}
+
+function formatDateOnly(value) {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleDateString();
+}
+
+function formatDateTime(value) {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleString();
 }
 
 
@@ -945,6 +1258,7 @@ async function loadTopProductsMonthly(month) {
 
     if (top.length === 0) {
       table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b;">No data for selected month</td></tr>';
+      applyAdminSearchToSection("analytics");
       return;
     }
 
@@ -959,6 +1273,7 @@ async function loadTopProductsMonthly(month) {
         <td>₱${parseFloat(p.total_profit).toLocaleString()}</td>
       </tr>
     `).join('');
+    applyAdminSearchToSection("analytics");
   } catch (e) {
     console.error('Error loading top products:', e);
   }
@@ -975,6 +1290,7 @@ async function loadDeadStock() {
 
     if (data.length === 0) {
       table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#1eff8e;"><i class="fas fa-check-circle"></i> No dead stock detected</td></tr>';
+      applyAdminSearchToSection("analytics");
       return;
     }
 
@@ -995,6 +1311,7 @@ async function loadDeadStock() {
         </tr>
       `;
     }).join('');
+    applyAdminSearchToSection("analytics");
   } catch (e) {
     console.error('Error loading dead stock:', e);
   }
@@ -1050,17 +1367,16 @@ function loadOrders() {
 
 function filterOrders(status) {
   currentFilter = status;
-
-  const tabs = document.querySelectorAll(".filter-tab");
-  tabs.forEach((tab) => {
-    if (tab.dataset.status === status) {
-      tab.classList.add("active");
-    } else {
-      tab.classList.remove("active");
-    }
+  document.querySelectorAll(".filter-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.status === status);
   });
+  displayOrdersInTable();
+}
 
-  loadOrders();
+async function viewAllRecentOrders() {
+  currentFilter = "all";
+  await switchSection("orders");
+  filterOrders("all");
 }
 
 function getStatusLabel(status) {
@@ -1114,9 +1430,7 @@ function openOrderDetail(orderId) {
 function closeOrderDetail() {
   const modal = document.getElementById("orderDetailModal");
   if (modal) modal.classList.remove("active");
-
-  const dropdown = document.getElementById("statusDropdown");
-  if (dropdown) dropdown.classList.remove("active");
+  closeOrderStatusModal();
 }
 
 function toggleStatusDropdown() {
@@ -1146,6 +1460,70 @@ function updateOrderStatus(newStatus) {
 
 function printOrder() {
   if (!currentOrderId) return;
+
+  const realOrder = realOrdersData.find((order) => String(order.id) === String(currentOrderId));
+  if (realOrder) {
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Order ${realOrder.order_number}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #0f1720; }
+            h1 { color: #0891b2; }
+            .section { margin: 20px 0; }
+            .label { font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+          </style>
+        </head>
+        <body>
+          <h1>Order ${realOrder.order_number}</h1>
+          <div class="section">
+            <p><span class="label">Customer:</span> ${realOrder.customer_name || "Guest"}</p>
+            <p><span class="label">Email:</span> ${realOrder.customer_email || "N/A"}</p>
+            <p><span class="label">Phone:</span> ${realOrder.customer_phone || "N/A"}</p>
+            <p><span class="label">Date:</span> ${formatDateTime(realOrder.created_at)}</p>
+            <p><span class="label">Status:</span> ${capitalizeFirst(realOrder.status || "pending")}</p>
+          </div>
+          <div class="section">
+            <h2>Products</h2>
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr>
+              </thead>
+              <tbody>
+                ${realOrder.items.map((item) => `
+                  <tr>
+                    <td>${item.product_name}</td>
+                    <td>${item.quantity}</td>
+                    <td>${formatCurrency(item.price)}</td>
+                    <td>${formatCurrency(item.subtotal)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="section">
+            <h2>Payment Details</h2>
+            <p><span class="label">Payment Method:</span> ${realOrder.payment_method || "N/A"}</p>
+            <p><span class="label">Subtotal:</span> ${formatCurrency(realOrder.subtotal)}</p>
+            <p><span class="label">Shipping Fee:</span> ${formatCurrency(realOrder.shipping_cost)}</p>
+            <p><span class="label">Total:</span> ${formatCurrency(realOrder.total)}</p>
+          </div>
+          <div class="section">
+            <h2>Delivery Details</h2>
+            <p><span class="label">Address:</span> ${realOrder.shipping_address || "N/A"}</p>
+            <p><span class="label">City:</span> ${realOrder.city || "N/A"}</p>
+            <p><span class="label">Postal Code:</span> ${realOrder.zip_code || "N/A"}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+    return;
+  }
 
   const order = ordersData.find((o) => o.id === currentOrderId);
   if (!order) return;
@@ -1203,20 +1581,21 @@ function printOrder() {
 }
 
 function exportOrders() {
-  const filteredOrders = currentFilter === "all" ? ordersData : ordersData.filter((order) => order.status === currentFilter);
-
-  const headers = ["Order ID", "Customer", "Products", "Total", "Payment", "Status", "Date"];
+  const filteredOrders = getFilteredLiveOrders();
+  const headers = ["Order ID", "Customer", "Email", "Phone", "Products", "Total", "Payment", "Status", "Date"];
   const csvContent = [
     headers.join(","),
     ...filteredOrders.map((order) =>
       [
-        order.id,
-        order.customer,
-        `"${order.products.map((p) => `${p.name} (${p.qty})`).join("; ")}"` , // Enclose products in quotes
-        order.total,
-        order.payment,
-        getStatusLabel(order.status),
-        order.date,
+        order.order_number,
+        `"${String(order.customer_name || "Guest").replace(/"/g, '""')}"`,
+        `"${String(order.customer_email || "").replace(/"/g, '""')}"`,
+        `"${String(order.customer_phone || "").replace(/"/g, '""')}"`,
+        `"${order.items.map((item) => `${item.product_name} (${item.quantity})`).join("; ").replace(/"/g, '""')}"`,
+        Number(order.total || 0),
+        `"${String(order.payment_method || "").replace(/"/g, '""')}"`,
+        capitalizeFirst(order.status || "pending"),
+        formatDateTime(order.created_at),
       ].join(","),
     ),
   ].join("\n");
@@ -1225,7 +1604,7 @@ function exportOrders() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `orders_${currentFilter}_${new Date().toISOString().split("T")[0]}.csv`;
+  a.download = `orders_${currentFilter || "all"}_${new Date().toISOString().split("T")[0]}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1267,6 +1646,7 @@ async function loadDashboardData() {
       </tr>
     `;
   }).join("");
+  applyAdminSearchToSection("dashboard");
 }
 
 function loadInventoryData() {
@@ -1303,6 +1683,7 @@ function loadInventoryData() {
       </tr>
     `;
   }).join("");
+  applyAdminSearchToSection("inventory");
 }
 
 function loadAnalyticsData() {
@@ -1347,6 +1728,7 @@ function changePassword(event) {
 function refreshDashboard() {
   showToast("success", "Dashboard refreshed!");
   loadDashboardData();
+  loadDashboardStats();
   loadAnalyticsData();
 }
 
@@ -1482,22 +1864,17 @@ function showToast(type, message) {
 function previewProductImage(event) {
   const file = event.target.files[0];
   if (file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const preview = document.getElementById('imagePreview');
-      const previewImg = document.getElementById('previewImg');
-      const imageUrl = document.getElementById('productImageUrl');
-      
-      previewImg.src = e.target.result;
-      imageUrl.value = e.target.result; 
-      if (preview) preview.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+    setProductImagePreview(URL.createObjectURL(file));
+    return;
   }
+
+  setProductImagePreview(currentEditingProductId
+    ? resolveProductImageUrl(productsData.find((product) => String(product.id) === String(currentEditingProductId)))
+    : "");
 }
 
 function openAddStockModal(productId) {
-  const product = productsData.find(p => p.id === productId);
+  const product = productsData.find(p => String(p.id) === String(productId));
   if (!product) return;
 
   const modal = document.getElementById("addStockModal");
@@ -1525,7 +1902,7 @@ function closeAddStockModal() {
   if (form) form.reset();
 }
 
-function confirmAddStock() {
+async function confirmAddStock() {
   const productId = parseInt(document.getElementById("stockProductId").value);
   const quantityToAdd = parseInt(document.getElementById("stockQuantityToAdd").value);
 
@@ -1534,16 +1911,41 @@ function confirmAddStock() {
     return;
   }
 
-  const productIndex = productsData.findIndex(p => p.id === productId);
-  if (productIndex !== -1) {
-    productsData[productIndex].stock += quantityToAdd;
-    showToast("success", `Added ${quantityToAdd} units to inventory!`);
-    loadInventoryData();
-    loadProductsData(); 
-    closeAddStockModal();
-  } else {
+  const product = productsData.find(p => p.id === productId);
+  if (!product) {
     showToast("error", "Product not found, cannot update stock.");
     closeAddStockModal();
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('name', product.name);
+    formData.append('category', product.category);
+    formData.append('brand', product.brand);
+    formData.append('price', product.price);
+    formData.append('stock', Number(product.stock) + quantityToAdd);
+    if (product.models) formData.append('models', JSON.stringify(product.models));
+
+    const response = await fetch(`/api/products/${productId}`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+    if (response.ok && data.success) {
+      showToast("success", `Added ${quantityToAdd} units to inventory!`);
+      await refreshAdminSection(getActiveAdminSection());
+      closeAddStockModal();
+    } else {
+      showToast("error", data.message || "Failed to update stock");
+    }
+  } catch (error) {
+    console.error('Error adding stock:', error);
+    showToast("error", "Failed to update stock");
   }
 }
 
@@ -1593,6 +1995,40 @@ function buildSpecificationsFromFields() {
 
 let realOrdersData = [];
 
+function getFilteredLiveOrders() {
+  const query = getAdminSearchQuery();
+
+  return realOrdersData.filter((order) => {
+    const matchesStatus = currentFilter === "all" || order.status === currentFilter;
+    if (!matchesStatus) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    const searchText = [
+      order.order_number,
+      order.customer_name,
+      order.customer_email,
+      order.customer_phone,
+      order.status,
+      order.payment_method,
+      order.shipping_address,
+      order.city,
+      order.zip_code,
+      ...(order.items || []).flatMap((item) => [
+        item.product_name,
+        item.product_brand,
+        item.product_category
+      ])
+    ].join(" ");
+
+    return matchesAdminSearch(searchText);
+  });
+}
+
 /**
  * Load orders from database
  */
@@ -1622,100 +2058,98 @@ async function loadOrders() {
 function displayOrdersInTable() {
   const ordersTableBody = document.getElementById('ordersTableBody');
   const ordersGrid = document.getElementById('ordersGrid');
+  const filteredOrders = getFilteredLiveOrders();
   
   // Support both table and grid views
   if (ordersTableBody) {
-    if (realOrdersData.length === 0) {
+    if (filteredOrders.length === 0) {
       ordersTableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px;">No orders found</td></tr>';
-      return;
+    } else {
+      ordersTableBody.innerHTML = filteredOrders.map(order => {
+        const statusClass = getOrderStatusClass(order.status);
+        
+        return `
+          <tr>
+            <td><strong>${order.order_number}</strong></td>
+            <td>${order.customer_name}</td>
+            <td>${order.customer_email}</td>
+            <td>${order.customer_phone}</td>
+            <td><strong>₱${parseFloat(order.total).toLocaleString()}</strong></td>
+            <td>
+              <span class="status-badge status-${statusClass}">${capitalizeFirst(order.status)}</span>
+            </td>
+            <td>${new Date(order.created_at).toLocaleDateString()}</td>
+            <td>
+              <button class="btn-action btn-primary" onclick="viewOrderDetails(${order.id})" style="margin-right: 5px;">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button class="btn-action btn-secondary" onclick="openOrderStatusModal(${order.id})">
+                <i class="fas fa-edit"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
-
-    ordersTableBody.innerHTML = realOrdersData.map(order => {
-      const statusClass = getOrderStatusClass(order.status);
-      
-      return `
-        <tr>
-          <td><strong>${order.order_number}</strong></td>
-          <td>${order.customer_name}</td>
-          <td>${order.customer_email}</td>
-          <td>${order.customer_phone}</td>
-          <td><strong>₱${parseFloat(order.total).toLocaleString()}</strong></td>
-          <td>
-            <span class="status-badge status-${statusClass}">${capitalizeFirst(order.status)}</span>
-          </td>
-          <td>${new Date(order.created_at).toLocaleDateString()}</td>
-          <td>
-            <button class="btn-action btn-primary" onclick="viewOrderDetails(${order.id})" style="margin-right: 5px;">
-              <i class="fas fa-eye"></i>
-            </button>
-            <button class="btn-action btn-secondary" onclick="updateOrderStatus(${order.id}, '${order.status}')">
-              <i class="fas fa-edit"></i>
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
   }
   
   // Display as cards in grid view
   if (ordersGrid) {
-    if (realOrdersData.length === 0) {
+    if (filteredOrders.length === 0) {
       ordersGrid.innerHTML = '<p style="text-align: center; padding: 40px;">No orders found</p>';
-      return;
-    }
-    
-    ordersGrid.innerHTML = realOrdersData.map(order => {
-      const statusClass = getOrderStatusClass(order.status);
-      const statusLabel = capitalizeFirst(order.status).toUpperCase();
-      
-      // Get first 3 items to display
-      const itemsToShow = order.items.slice(0, 3);
-      const hasMoreItems = order.items.length > 3;
-      
-      return `
-        <div class="order-card" onclick="viewOrderDetails(${order.id})" style="cursor: pointer;">
-          <div class="order-card-header">
-            <div class="order-id">${order.order_number}</div>
-            <span class="status-badge ${order.status}">${statusLabel}</span>
-          </div>
-          
-          <div class="order-customer">
-            <i class="fas fa-user"></i>
-            <span>${order.customer_name}</span>
-          </div>
-          
-          <div class="order-products">
-            ${itemsToShow.map(item => {
-              const imageUrl = item.product_image ? `/storage/${item.product_image}` : 'https://via.placeholder.com/60/1a2332/1ee0ff?text=' + item.product_name.substring(0, 2);
-              return `
-                <div class="order-product-item">
-                  <img src="${imageUrl}" alt="${item.product_name}" class="order-product-img">
-                  <div class="order-product-details">
-                    <div class="order-product-name">${item.product_name}</div>
-                    <div class="order-product-qty">Qty: ${item.quantity}</div>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-            ${hasMoreItems ? `<div style="text-align: center; color: #64748b; font-size: 12px; margin-top: 8px;">+${order.items.length - 3} more items</div>` : ''}
-          </div>
-          
-          <div class="order-footer">
-            <div>
-              <div class="order-total-label">Total:</div>
-              <div class="order-total-amount">₱${parseFloat(order.total).toLocaleString()}</div>
+    } else {
+      ordersGrid.innerHTML = filteredOrders.map(order => {
+        const statusLabel = capitalizeFirst(order.status).toUpperCase();
+        
+        const itemsToShow = order.items.slice(0, 3);
+        const hasMoreItems = order.items.length > 3;
+        
+        return `
+          <div class="order-card" onclick="viewOrderDetails(${order.id})" style="cursor: pointer;">
+            <div class="order-card-header">
+              <div class="order-id">${order.order_number}</div>
+              <span class="status-badge ${order.status}">${statusLabel}</span>
             </div>
-            <div style="text-align: right;">
-              <div class="order-payment">Payment: ${order.payment_method}</div>
-              <div class="order-shipping">
-                <i class="fas fa-calendar"></i>
-                <span>${new Date(order.created_at).toLocaleDateString()}</span>
+            
+            <div class="order-customer">
+              <i class="fas fa-user"></i>
+              <span>${order.customer_name}</span>
+            </div>
+            
+            <div class="order-products">
+              ${itemsToShow.map(item => {
+        const imageUrl = resolveProductImageUrl(item.product_image || ('https://via.placeholder.com/60/1a2332/1ee0ff?text=' + item.product_name.substring(0, 2)));
+                return `
+                  <div class="order-product-item">
+                    <img src="${imageUrl}" alt="${item.product_name}" class="order-product-img">
+                    <div class="order-product-details">
+                      <div class="order-product-name">${item.product_name}</div>
+                      <div class="order-product-qty">Qty: ${item.quantity}</div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+              ${hasMoreItems ? `<div style="text-align: center; color: #64748b; font-size: 12px; margin-top: 8px;">+${order.items.length - 3} more items</div>` : ''}
+            </div>
+            
+            <div class="order-footer">
+              <div>
+                <div class="order-total-label">Total:</div>
+                <div class="order-total-amount">₱${parseFloat(order.total).toLocaleString()}</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="order-payment">Payment: ${order.payment_method}</div>
+                <div class="order-shipping">
+                  <i class="fas fa-calendar"></i>
+                  <span>${new Date(order.created_at).toLocaleDateString()}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
+      applyAdminSearchToSection("orders");
+    }
   }
 }
 
@@ -1739,102 +2173,103 @@ function getOrderStatusClass(status) {
 function viewOrderDetails(orderId) {
   const order = realOrdersData.find(o => o.id === orderId);
   if (!order) {
-    alert('Order not found!');
+    showToast("error", "Order not found");
     return;
   }
 
-  const itemsHTML = order.items.map(item => {
-    const imageUrl = item.product_image ? `/storage/${item.product_image}` : 'https://via.placeholder.com/80';
+  currentOrderId = order.id;
+
+  document.getElementById("orderDetailId").textContent = `Order #${order.order_number}`;
+  document.getElementById("orderDetailMeta").textContent = `Placed ${formatDateTime(order.created_at)}`;
+  document.getElementById("detailOrderId").textContent = order.order_number;
+  document.getElementById("detailCustomer").textContent = order.customer_name || "Guest";
+  document.getElementById("detailStatus").innerHTML = `<span class="status-badge status-${getOrderStatusClass(order.status)}">${escapeAdminHtml(capitalizeFirst(order.status || "pending"))}</span>`;
+  document.getElementById("detailDate").textContent = formatDateTime(order.created_at);
+  document.getElementById("detailCustomerEmail").textContent = order.customer_email || "N/A";
+  document.getElementById("detailCustomerPhone").textContent = order.customer_phone || "N/A";
+  document.getElementById("detailShippingAddress").textContent = order.shipping_address || "Not provided";
+  document.getElementById("detailShippingCity").textContent = order.city || "N/A";
+  document.getElementById("detailZipCode").textContent = order.zip_code || "N/A";
+  document.getElementById("detailPaymentMethod").textContent = order.payment_method || "N/A";
+  document.getElementById("detailSubtotal").textContent = formatCurrency(order.subtotal);
+  document.getElementById("detailShippingFee").textContent = formatCurrency(order.shipping_cost);
+  document.getElementById("detailTotal").textContent = formatCurrency(order.total);
+  document.getElementById("detailShippingMethod").textContent = order.shipping_method || "Standard Delivery";
+  document.getElementById("detailTrackingNumber").textContent = order.tracking_number || "To be assigned";
+  document.getElementById("detailEstimatedDelivery").textContent = order.estimated_delivery
+    ? formatDateOnly(order.estimated_delivery)
+    : "To be scheduled";
+
+  const detailProducts = document.getElementById("detailProducts");
+  detailProducts.innerHTML = order.items.map((item) => {
+    const imageUrl = resolveProductImageUrl(item.product_image || "https://via.placeholder.com/80");
     return `
-      <div style="display: flex; gap: 15px; padding: 15px; border-bottom: 1px solid #e5e7eb; align-items: center;">
-        <img src="${imageUrl}" alt="${item.product_name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
-        <div style="flex: 1;">
-          <div style="font-weight: 600; margin-bottom: 5px;">${item.product_name}</div>
-          <div style="color: #6b7280; font-size: 14px;">Brand: ${item.product_brand} | Category: ${capitalizeFirst(item.product_category)}</div>
-          <div style="color: #059669; font-weight: 500; margin-top: 5px;">₱${parseFloat(item.price).toLocaleString()} × ${item.quantity} = ₱${parseFloat(item.subtotal).toLocaleString()}</div>
+      <div class="detail-product-item">
+        <img src="${imageUrl}" alt="${escapeAdminHtml(item.product_name)}" class="detail-product-img">
+        <div class="detail-product-info">
+          <div class="detail-product-name">${escapeAdminHtml(item.product_name)}</div>
+          <div class="detail-product-meta">${escapeAdminHtml(item.product_brand || "No brand")} · ${escapeAdminHtml(capitalizeFirst(item.product_category || "uncategorized"))}</div>
+          <div class="detail-product-qty">Quantity: ${Number(item.quantity || 0).toLocaleString()}</div>
+          <div class="detail-product-price">${formatCurrency(item.price)} each · ${formatCurrency(item.subtotal)} total</div>
         </div>
       </div>
     `;
-  }).join('');
+  }).join("");
 
-  const detailsHTML = `
-    <div style="padding: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e5e7eb;">
-        <h3 style="margin: 0;">Order #${order.order_number}</h3>
-        <span class="status-badge status-${getOrderStatusClass(order.status)}">${capitalizeFirst(order.status)}</span>
-      </div>
-      
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin-bottom: 10px;">Customer Information</h4>
-        <p style="margin: 5px 0;"><strong>Name:</strong> ${order.customer_name}</p>
-        <p style="margin: 5px 0;"><strong>Email:</strong> ${order.customer_email}</p>
-        <p style="margin: 5px 0;"><strong>Phone:</strong> ${order.customer_phone}</p>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin-bottom: 10px;">Shipping Address</h4>
-        <p style="margin: 5px 0;">${order.shipping_address}</p>
-        <p style="margin: 5px 0;">${order.city}, ${order.zip_code}</p>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin-bottom: 10px;">Order Items</h4>
-        ${itemsHTML}
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin-bottom: 10px;">Order Summary</h4>
-        <div style="background: #f9fafb; padding: 15px; border-radius: 8px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span>Subtotal:</span>
-            <span>₱${parseFloat(order.subtotal).toLocaleString()}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span>Shipping:</span>
-            <span>₱${parseFloat(order.shipping_cost).toLocaleString()}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 2px solid #e5e7eb;">
-            <span style="font-weight: 700;">Total:</span>
-            <span style="font-weight: 700; color: #059669;">₱${parseFloat(order.total).toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <p style="margin: 5px 0;"><strong>Payment Method:</strong> ${order.payment_method}</p>
-        <p style="margin: 5px 0;"><strong>Order Date:</strong> ${new Date(order.created_at).toLocaleString()}</p>
-      </div>
-    </div>
-  `;
-
-  // Show in modal or alert
-  if (confirm('Order Details:\n\n' + order.order_number + '\nCustomer: ' + order.customer_name + '\nTotal: ₱' + parseFloat(order.total).toLocaleString() + '\n\nWould you like to update the status?')) {
-    updateOrderStatus(orderId, order.status);
-  }
+  document.getElementById("orderDetailModal").classList.add("active");
+  closeOrderStatusModal();
 }
 
 /**
  * Update order status
  */
-async function updateOrderStatus(orderId, currentStatus) {
-  const statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-  const statusLabels = {
-    'pending': 'Pending',
-    'processing': 'Processing',
-    'shipped': 'Shipped',
-    'delivered': 'Delivered',
-    'cancelled': 'Cancelled'
-  };
-
-  const newStatus = prompt(`Current status: ${statusLabels[currentStatus]}\n\nEnter new status:\n- pending\n- processing\n- shipped\n- delivered\n- cancelled`, currentStatus);
-
-  if (!newStatus || !statuses.includes(newStatus.toLowerCase())) {
+function openOrderStatusModal(orderId = currentOrderId) {
+  const order = realOrdersData.find((entry) => String(entry.id) === String(orderId));
+  if (!order) {
+    showToast("error", "Unable to find this order");
     return;
+  }
+
+  currentOrderId = order.id;
+  document.getElementById("orderStatusOrderNumber").textContent = `#${order.order_number}`;
+  document.getElementById("orderStatusCurrentBadge").innerHTML = `
+    <span class="status-badge status-${getOrderStatusClass(order.status)}">${escapeAdminHtml(capitalizeFirst(order.status || "pending"))}</span>
+    <span class="info-label">Current status</span>
+  `;
+  document.getElementById("orderStatusSelect").value = order.status || "pending";
+  document.getElementById("orderStatusModal").classList.add("active");
+}
+
+function closeOrderStatusModal() {
+  const modal = document.getElementById("orderStatusModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+}
+
+async function submitOrderStatusUpdate(event) {
+  if (event) {
+    event.preventDefault();
+  }
+
+  const order = realOrdersData.find((entry) => String(entry.id) === String(currentOrderId));
+  const statusSelect = document.getElementById("orderStatusSelect");
+  const saveButton = document.getElementById("saveOrderStatusBtn");
+  const newStatus = statusSelect?.value;
+
+  if (!order || !newStatus) {
+    showToast("error", "Please select a valid order and status");
+    return;
+  }
+
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
   }
 
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    const response = await fetch(`/api/orders/${orderId}/status`, {
+    const response = await fetch(`/api/orders/${order.id}/status`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1846,14 +2281,24 @@ async function updateOrderStatus(orderId, currentStatus) {
     const data = await response.json();
 
     if (data.success) {
-      alert('Order status updated successfully!');
-      loadOrders(); // Reload orders
+      closeOrderStatusModal();
+      await loadOrders();
+      await loadDashboardData();
+      await loadDashboardStats();
+      await loadNotifications();
+      viewOrderDetails(order.id);
+      showToast("success", `Order updated to ${capitalizeFirst(newStatus)}`);
     } else {
-      alert('Failed to update order status: ' + data.message);
+      showToast("error", data.message || "Failed to update order status");
     }
   } catch (error) {
     console.error('Error updating order status:', error);
-    alert('An error occurred while updating order status');
+    showToast("error", "An error occurred while updating order status");
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.innerHTML = "Save Status";
+    }
   }
 }
 
@@ -1861,26 +2306,7 @@ async function updateOrderStatus(orderId, currentStatus) {
  * Filter orders by status
  */
 function filterOrdersByStatus(status) {
-  // Temporarily store filtered data
-  const originalData = realOrdersData;
-  
-  if (status === 'all') {
-    realOrdersData = originalData;
-  } else {
-    realOrdersData = originalData.filter(order => order.status === status);
-  }
-  
-  // Redisplay orders
-  displayOrdersInTable();
-  
-  // Restore original data
-  realOrdersData = originalData;
-  
-  // Update active tab
-  document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
-  if (event && event.target) {
-    event.target.classList.add('active');
-  }
+  filterOrders(status);
 }
 
 // Load notifications from recent orders
@@ -1988,47 +2414,195 @@ function closeNotificationPanel() {
 // Load dashboard statistics
 async function loadDashboardStats() {
   try {
-    // Load analytics summary
-    const analyticsResponse = await fetch('/api/admin/analytics');
-    
-    // Load products count
-    const productsResponse = await fetch('/api/admin/products');
-    const productsData = await productsResponse.json();
-    
-    // Load users count (customers)
-    const usersResponse = await fetch('/api/admin/users');
-    let usersCount = 0;
-    if (usersResponse.ok) {
-      const usersData = await usersResponse.json();
-      usersCount = usersData.length || 0;
-    }
-    
-    if (analyticsResponse.ok) {
-      const analyticsData = await analyticsResponse.json();
-      
-      // Calculate total revenue
-      const totalRevenue = analyticsData.total_sales || 0;
-      document.getElementById('totalRevenue').textContent = `₱${totalRevenue.toLocaleString()}`;
-      
-      // Total orders (record count)
-      const totalOrders = analyticsData.record_count || 0;
-      document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
-      
-      // Update change indicators (simplified - just show current data)
-      document.getElementById('revenueChange').innerHTML = '<i class="fas fa-check"></i> Overall tracked';
-      document.getElementById('ordersChange').innerHTML = '<i class="fas fa-check"></i> Historical logs';
-    }
-    
-    // Total customers
-    document.getElementById('totalCustomers').textContent = usersCount.toLocaleString();
-    document.getElementById('customersChange').innerHTML = '<i class="fas fa-check"></i> Registered users';
-    
-    // Total products
-    document.getElementById('totalProducts').textContent = productsData.length.toLocaleString();
-    document.getElementById('productsChange').innerHTML = '<i class="fas fa-check"></i> In catalog';
-    
+    const response = await fetch('/api/admin/analytics');
+    const summary = response.ok ? await response.json() : {};
+
+    const totalRevenue = Number(summary.combined_revenue || 0);
+    const totalOrders = Number(summary.combined_orders || 0);
+    const totalCustomers = Number(summary.total_customers || 0);
+    const totalProducts = Number(summary.total_products || 0);
+    const historicalRevenue = Number(summary.historical_revenue || 0);
+    const liveRevenue = Number(summary.live_revenue || 0);
+    const historicalOrders = Number(summary.historical_orders || 0);
+    const liveOrders = Number(summary.live_orders || 0);
+    const upcomingOrders = Number(summary.upcoming_orders || 0);
+    dashboardSummaryData = {
+      totalRevenue,
+      totalOrders,
+      totalCustomers,
+      totalProducts,
+      historicalRevenue,
+      liveRevenue,
+      historicalOrders,
+      liveOrders,
+      upcomingOrders
+    };
+
+    document.getElementById('totalRevenue').textContent = `₱${totalRevenue.toLocaleString()}`;
+    document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
+    document.getElementById('totalCustomers').textContent = totalCustomers.toLocaleString();
+    document.getElementById('totalProducts').textContent = totalProducts.toLocaleString();
+
+    document.getElementById('revenueChange').innerHTML = `<i class="fas fa-check"></i> History ₱${historicalRevenue.toLocaleString()} + live ₱${liveRevenue.toLocaleString()}`;
+    document.getElementById('ordersChange').innerHTML = `<i class="fas fa-check"></i> ${historicalOrders.toLocaleString()} history + ${liveOrders.toLocaleString()} site orders (${upcomingOrders.toLocaleString()} upcoming)`;
+    document.getElementById('customersChange').innerHTML = '<i class="fas fa-check"></i> Registered customer accounts';
+    document.getElementById('productsChange').innerHTML = '<i class="fas fa-check"></i> Live catalog synced';
   } catch (error) {
     console.error('Error loading dashboard stats:', error);
+    document.getElementById('revenueChange').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to load';
+    document.getElementById('ordersChange').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to load';
+    document.getElementById('customersChange').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to load';
+    document.getElementById('productsChange').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed to load';
+  }
+}
+
+function handleDashboardCardKey(event, metric) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    openDashboardStatModal(metric);
+  }
+}
+
+function buildDashboardStatConfig(metric) {
+  const recentOrders = realOrdersData.slice(0, 5);
+  const recentUniqueCustomers = new Set(
+    recentOrders.map((order) => order.customer_email || order.customer_name).filter(Boolean)
+  ).size;
+  const orderStatusCount = (status) => realOrdersData.filter((order) => order.status === status).length;
+  const categories = new Set(productsData.map((product) => product.category).filter(Boolean));
+  const brands = new Set(productsData.map((product) => product.brand).filter(Boolean));
+  const lowStockCount = productsData.filter((product) => Number(product.stock) > 0 && Number(product.stock) <= 20).length;
+  const outOfStockCount = productsData.filter((product) => Number(product.stock) === 0).length;
+  const topStockedProduct = [...productsData].sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0))[0];
+  const latestOrder = realOrdersData[0];
+  const topRecentOrder = [...recentOrders].sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const averageOrderValue = dashboardSummaryData.totalOrders
+    ? dashboardSummaryData.totalRevenue / dashboardSummaryData.totalOrders
+    : 0;
+
+  const configs = {
+    revenue: {
+      title: "Revenue Breakdown",
+      kicker: "Dashboard revenue",
+      value: formatCurrency(dashboardSummaryData.totalRevenue),
+      description: "Combined sales from historical records and live website orders, kept inside the current admin theme.",
+      icon: "fa-dollar-sign",
+      actionSection: "analytics",
+      actionLabel: "Open Analytics",
+      cards: [
+        { label: "Historical sales", value: formatCurrency(dashboardSummaryData.historicalRevenue), note: "Imported past transaction records." },
+        { label: "Live website sales", value: formatCurrency(dashboardSummaryData.liveRevenue), note: "Orders placed through the current site." },
+        { label: "Average order", value: formatCurrency(averageOrderValue), note: "Combined revenue divided by total orders." }
+      ],
+      list: [
+        { label: "Top recent order", value: topRecentOrder ? formatCurrency(topRecentOrder.total) : "N/A", note: topRecentOrder ? `${topRecentOrder.order_number} from ${topRecentOrder.customer_name}` : "No recent order data yet." },
+        { label: "Orders contributing", value: Number(dashboardSummaryData.totalOrders || 0).toLocaleString(), note: "Revenue is driven by both historical and current website orders." },
+        { label: "Source", value: "History + Live", note: "Breakdown comes from the admin analytics endpoint." }
+      ]
+    },
+    orders: {
+      title: "Order Activity",
+      kicker: "Order pipeline",
+      value: Number(dashboardSummaryData.totalOrders || 0).toLocaleString(),
+      description: "A quick view of where orders came from and what is still moving through fulfillment.",
+      icon: "fa-shopping-cart",
+      actionSection: "orders",
+      actionLabel: "Open Orders",
+      cards: [
+        { label: "Historical orders", value: Number(dashboardSummaryData.historicalOrders || 0).toLocaleString(), note: "Past order history already counted." },
+        { label: "Live site orders", value: Number(dashboardSummaryData.liveOrders || 0).toLocaleString(), note: "Current orders created in the website." },
+        { label: "Upcoming", value: Number(dashboardSummaryData.upcomingOrders || 0).toLocaleString(), note: "Orders still expected to be fulfilled." }
+      ],
+      list: [
+        { label: "Latest order", value: latestOrder ? latestOrder.order_number : "N/A", note: latestOrder ? `${latestOrder.customer_name} placed it on ${formatDateOnly(latestOrder.created_at)}` : "No order records loaded yet." },
+        { label: "Processing now", value: orderStatusCount("processing").toLocaleString(), note: "Orders currently being prepared." },
+        { label: "Delivered", value: orderStatusCount("delivered").toLocaleString(), note: "Orders already marked complete." }
+      ]
+    },
+    customers: {
+      title: "Customer Snapshot",
+      kicker: "Customer detail",
+      value: Number(dashboardSummaryData.totalCustomers || 0).toLocaleString(),
+      description: "Customer totals stay tied to registered accounts, while recent order activity shows who is buying right now.",
+      icon: "fa-users",
+      actionSection: "orders",
+      actionLabel: "Open Orders",
+      cards: [
+        { label: "Registered accounts", value: Number(dashboardSummaryData.totalCustomers || 0).toLocaleString(), note: "Primary customer count from analytics." },
+        { label: "Recent unique buyers", value: recentUniqueCustomers.toLocaleString(), note: "Unique names or emails from the latest order feed." },
+        { label: "Orders with contact info", value: realOrdersData.filter((order) => order.customer_email || order.customer_phone).length.toLocaleString(), note: "Orders containing reachable customer details." }
+      ],
+      list: [
+        { label: "Latest buyer", value: latestOrder ? (latestOrder.customer_name || "Guest") : "N/A", note: latestOrder ? `${latestOrder.customer_email || latestOrder.customer_phone || "No contact data"}` : "No recent customer activity yet." },
+        { label: "Source", value: "Accounts + Orders", note: "Totals come from customer accounts, while the activity panel uses recent orders." },
+        { label: "Recent order window", value: recentOrders.length.toLocaleString(), note: "Dashboard customer activity preview uses the most recent five orders." }
+      ]
+    },
+    products: {
+      title: "Catalog Health",
+      kicker: "Product inventory",
+      value: Number(dashboardSummaryData.totalProducts || 0).toLocaleString(),
+      description: "A quick catalog view with synced product count, stock health, and a snapshot of category coverage.",
+      icon: "fa-box",
+      actionSection: "products",
+      actionLabel: "Open Products",
+      cards: [
+        { label: "Categories", value: categories.size.toLocaleString(), note: "Distinct categories currently visible in the catalog." },
+        { label: "Brands", value: brands.size.toLocaleString(), note: "Brands represented in the live product list." },
+        { label: "Low stock items", value: lowStockCount.toLocaleString(), note: "Products that need attention soon." }
+      ],
+      list: [
+        { label: "Out of stock", value: outOfStockCount.toLocaleString(), note: "Products with zero available quantity." },
+        { label: "Top stocked item", value: topStockedProduct ? topStockedProduct.name : "N/A", note: topStockedProduct ? `${Number(topStockedProduct.stock || 0).toLocaleString()} units available` : "No product inventory loaded yet." },
+        { label: "Source", value: "Live catalog", note: "Figures come from the current admin products dataset." }
+      ]
+    }
+  };
+
+  return configs[metric] || configs.orders;
+}
+
+function openDashboardStatModal(metric) {
+  const config = buildDashboardStatConfig(metric);
+  dashboardStatActionSection = config.actionSection;
+
+  document.getElementById("dashboardStatTitle").textContent = config.title;
+  document.getElementById("dashboardStatKicker").textContent = config.kicker;
+  document.getElementById("dashboardStatValue").textContent = config.value;
+  document.getElementById("dashboardStatDescription").textContent = config.description;
+  document.getElementById("dashboardStatBadge").innerHTML = `<i class="fas ${config.icon}"></i>`;
+  document.getElementById("dashboardStatActionBtn").textContent = config.actionLabel;
+  document.getElementById("dashboardStatGrid").innerHTML = config.cards.map((card) => `
+    <div class="stat-modal-card">
+      <div class="stat-modal-card-label">${escapeAdminHtml(card.label)}</div>
+      <div class="stat-modal-card-value">${escapeAdminHtml(card.value)}</div>
+      <div class="stat-modal-card-note">${escapeAdminHtml(card.note)}</div>
+    </div>
+  `).join("");
+  document.getElementById("dashboardStatList").innerHTML = config.list.map((item) => `
+    <div class="stat-modal-list-item">
+      <div class="stat-modal-list-copy">
+        <div class="stat-modal-list-label">${escapeAdminHtml(item.label)}</div>
+        <div class="stat-modal-list-note">${escapeAdminHtml(item.note)}</div>
+      </div>
+      <div class="stat-modal-list-value">${escapeAdminHtml(item.value)}</div>
+    </div>
+  `).join("");
+
+  document.getElementById("dashboardStatModal").classList.add("active");
+}
+
+function closeDashboardStatModal() {
+  const modal = document.getElementById("dashboardStatModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+}
+
+function handleDashboardStatAction() {
+  closeDashboardStatModal();
+  if (dashboardStatActionSection && dashboardStatActionSection !== "dashboard") {
+    switchSection(dashboardStatActionSection);
   }
 }
 
@@ -2096,7 +2670,7 @@ async function syncMLData() {
     const data = await response.json();
     
     if (response.ok && data.success) {
-      alert("✅ ML Analytics updated successfully!");
+      alert("✅ Smart Analytics updated successfully!");
       // reload the charts
       loadDashboardData();
     } else {
@@ -2108,6 +2682,6 @@ async function syncMLData() {
     alert("❌ Error: Unhandled network disconnect while triggering the task.");
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<i class="fas fa-sync"></i> Sync ML Config`;
+    btn.innerHTML = `<i class="fas fa-sync"></i> Refresh Smart Suggestions`;
   }
 }

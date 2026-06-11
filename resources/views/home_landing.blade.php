@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>ADE Garage</title>
 
   <!-- Google Fonts -->
@@ -71,18 +72,9 @@
 <section class="py-5">
   <div class="container products-container">
     <h2 class="section-title section-title-small mb-4">Featured Products</h2>
-    <div class="scroll-arrow scroll-left"><i class="bi bi-chevron-left"></i></div>
-    <div class="scroll-arrow scroll-right"><i class="bi bi-chevron-right"></i></div>
     <div class="products-wrapper">
       <div class="products-row">
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/motortires.webp') }}" alt="motor tires"></div><div>MOTORCYCLE TIRE<div class="price">₱4450.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/carburetor.jfif') }}" alt="carburetor"></div><div>CARBURETOR<div class="price">₱950.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/epipee.jpg') }}" alt="exhaust pipe"></div><div>EXHAUST PIPE<div class="price">₱780.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/helmett.jfif') }}" alt="helmet"></div><div>HELMET<div class="price">₱3200.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/drivebelt.jfif') }}" alt="drive belt"></div><div>DRIVE BELT<div class="price">₱530.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/battery pack.jfif') }}" alt="battery pack"></div><div>BATTERY PACK<div class="price">₱860.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/toolkit.jfif') }}" alt="tool kit"></div><div>TOOL KIT<div class="price">₱1900.00</div></div></div>
-        <div class="product-card"><div class="product-img"><img src="{{ asset('storage/asset/headlight.jfif') }}" alt="led headlight"></div><div>LED HEADLIGHT<div class="price">₱399</div></div></div>
+        <!-- Pop.js automatically injects Highest Selling Products here from API. -->
       </div>
     </div>
   </div>
@@ -161,7 +153,16 @@
     </div>
   </div>
 </section>
-  <div id="authModalBackdrop" class="modal-backdrop-custom mb-hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true">
+  <div
+    id="authModalBackdrop"
+    class="modal-backdrop-custom mb-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="authTitle"
+    aria-hidden="true"
+    data-open-on-error="{{ $errors->any() ? 'true' : 'false' }}"
+    data-active-tab="{{ $errors->has('signup') || old('username') ? 'signup' : 'login' }}"
+  >
     <div class="auth-panel" id="authPanel" tabindex="-1">
       <div id="topToast" class="small-toast" role="status" aria-live="polite"></div>
       <div class="auth-top">
@@ -183,11 +184,9 @@
       </div>
 
       <div style="margin-top:10px">
-        @if ($errors->any())
-          <div class="alert alert-danger" role="alert" style="margin-bottom: 12px;">
-            {{ $errors->first() }}
-          </div>
-        @endif
+        <div id="authServerError" class="alert alert-danger{{ $errors->any() ? '' : ' d-none' }}" role="alert" style="margin-bottom: 12px;">
+          {{ $errors->first() }}
+        </div>
         <section id="panel-login" role="tabpanel" aria-labelledby="tab-login" class="mb-panel">
   <h2 id="authTitle" class="auth-title">WELCOME BACK</h2>
   <p class="auth-sub">Sign in to access orders, bookings & AI recommendations.</p>
@@ -196,7 +195,7 @@
     @csrf
     <div class="mb-3">
       <label class="form-label help-text">Email</label>
-      <input id="loginEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required aria-required="true" />
+      <input id="loginEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required aria-required="true" value="{{ old('email') }}" />
       <div class="invalid-feedback">Please enter your email</div>
     </div>
             <div class="mb-3 input-with-icon">
@@ -237,12 +236,12 @@
     <div class="row g-3">
       <div class="col-12">
         <label class="form-label help-text">username</label>
-        <input id="suUsername" name="username"type="text" class="form-control" placeholder="Choose a username">
+        <input id="suUsername" name="username"type="text" class="form-control" placeholder="Choose a username" value="{{ old('username') }}">
         <div class="invalid-feedback">Enter a username</div>
       </div>
               <div class="col-12">
         <label class="form-label help-text">Email</label>
-        <input id="suEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" >
+        <input id="suEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" value="{{ old('email') }}">
         <div class="invalid-feedback">Enter a valid email</div>
       </div>
 

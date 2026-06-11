@@ -71,7 +71,8 @@ class SupabaseAuthService
     public function uploadProductImage(\Illuminate\Http\UploadedFile $file): string
     {
         $filename  = uniqid('product_', true) . '.' . $file->getClientOriginalExtension();
-        $endpoint  = $this->url . '/storage/v1/object/product-images/' . $filename;
+        $bucket    = $this->getProductImagesBucket();
+        $endpoint  = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
         $response = Http::withoutVerifying()
             ->withHeaders([
@@ -90,7 +91,7 @@ class SupabaseAuthService
             throw new \RuntimeException('Supabase Storage upload failed: ' . $message);
         }
 
-        return $this->getPublicUrl($filename);
+        return $this->getPublicUrlFromBucket($bucket, $filename);
     }
 
     /**
@@ -98,10 +99,10 @@ class SupabaseAuthService
      */
     public function deleteProductImage(string $urlOrFilename): void
     {
-        // Extract filename from full URL if needed
-        $filename = basename(parse_url($urlOrFilename, PHP_URL_PATH));
+        $bucket = $this->getProductImagesBucket();
+        $filename = $this->extractBucketObjectPath($urlOrFilename, $bucket);
 
-        $endpoint = $this->url . '/storage/v1/object/product-images/' . $filename;
+        $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
         Http::withoutVerifying()
             ->withHeaders([
@@ -146,7 +147,34 @@ class SupabaseAuthService
 
     private function getPublicUrl(string $filename): string
     {
-        return $this->getPublicUrlFromBucket('product-images', $filename);
+        return $this->getPublicUrlFromBucket($this->getProductImagesBucket(), $filename);
+    }
+
+    private function getProductImagesBucket(): string
+    {
+        return (string) config('services.supabase.storage_bucket', 'product-images');
+    }
+
+    private function extractBucketObjectPath(string $urlOrFilename, string $bucket): string
+    {
+        $path = trim((string) (parse_url($urlOrFilename, PHP_URL_PATH) ?? $urlOrFilename), '/');
+        if ($path === '') {
+            return trim($urlOrFilename, '/');
+        }
+
+        $prefixes = [
+            'storage/v1/object/public/' . $bucket . '/',
+            'storage/v1/object/' . $bucket . '/',
+            $bucket . '/',
+        ];
+
+        foreach ($prefixes as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return substr($path, strlen($prefix));
+            }
+        }
+
+        return basename($path);
     }
 
     // -------------------------------------------------------------------------

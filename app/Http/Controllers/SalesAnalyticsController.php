@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\SalesHistory;
 use App\Models\Product;
+use App\Models\Order;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -24,11 +26,38 @@ class SalesAnalyticsController extends Controller
      */
     public function summary()
     {
+        $historicalRevenue = (float) SalesHistory::sum(DB::raw('price * quantity'));
+        $historicalProfit = (float) SalesHistory::sum('profit');
+        $historicalUnits = (int) SalesHistory::sum('quantity');
+        $historicalOrders = (int) SalesHistory::count();
+
+        $liveRevenue = (float) Order::sum('total');
+        $liveOrders = (int) Order::count();
+        $upcomingOrders = (int) Order::whereIn('status', [
+            'pending',
+            'processing',
+            'shipped',
+            'to-ship',
+            'shipping',
+            'unpaid',
+        ])->count();
+
         $summary = [
-            'total_sales'   => SalesHistory::sum(DB::raw('price * quantity')),
-            'total_profit'  => SalesHistory::sum('profit'),
-            'total_units'   => SalesHistory::sum('quantity'),
-            'record_count'  => SalesHistory::count(),
+            'total_sales'   => $historicalRevenue,
+            'total_profit'  => $historicalProfit,
+            'total_units'   => $historicalUnits,
+            'record_count'  => $historicalOrders,
+            'historical_revenue' => $historicalRevenue,
+            'historical_orders' => $historicalOrders,
+            'live_revenue' => $liveRevenue,
+            'live_orders' => $liveOrders,
+            'upcoming_orders' => $upcomingOrders,
+            'combined_revenue' => round($historicalRevenue + $liveRevenue, 2),
+            'combined_orders' => $historicalOrders + $liveOrders,
+            'total_customers' => User::where(function ($query) {
+                $query->whereNull('is_admin')->orWhere('is_admin', false);
+            })->count(),
+            'total_products' => Product::count(),
             'sales_by_month' => SalesHistory::select(
                     'month_name',
                     'month',

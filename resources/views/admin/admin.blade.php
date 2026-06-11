@@ -95,7 +95,7 @@
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card stat-card-clickable" role="button" tabindex="0" onclick="openDashboardStatModal('revenue')" onkeydown="handleDashboardCardKey(event, 'revenue')">
           <div class="stat-icon" style="background: linear-gradient(135deg, #1ee0ff 0%, #0891b2 100%);">
             <i class="fas fa-dollar-sign"></i>
           </div>
@@ -108,7 +108,7 @@
           </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card stat-card-clickable" role="button" tabindex="0" onclick="openDashboardStatModal('orders')" onkeydown="handleDashboardCardKey(event, 'orders')">
           <div class="stat-icon" style="background: linear-gradient(135deg, #1eff8e 0%, #10b981 100%);">
             <i class="fas fa-shopping-cart"></i>
           </div>
@@ -121,7 +121,7 @@
           </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card stat-card-clickable" role="button" tabindex="0" onclick="openDashboardStatModal('customers')" onkeydown="handleDashboardCardKey(event, 'customers')">
           <div class="stat-icon" style="background: linear-gradient(135deg, #ff7a1f 0%, #f97316 100%);">
             <i class="fas fa-users"></i>
           </div>
@@ -134,7 +134,7 @@
           </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card stat-card-clickable" role="button" tabindex="0" onclick="openDashboardStatModal('products')" onkeydown="handleDashboardCardKey(event, 'products')">
           <div class="stat-icon" style="background: linear-gradient(135deg, #ff1e8e 0%, #ec4899 100%);">
             <i class="fas fa-box"></i>
           </div>
@@ -153,7 +153,7 @@
       <div class="data-card">
         <div class="card-header">
           <h3>Recent Orders</h3>
-          <a href="#" class="view-all" onclick="switchSection('orders')">View All</a>
+          <a href="#" class="view-all" onclick="viewAllRecentOrders(); return false;">View All</a>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -215,7 +215,7 @@
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
-                <th>ML Tier</th>
+                <th>Smart Rating</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -238,11 +238,11 @@
 
       <div class="orders-filter-tabs">
         <button class="filter-tab active" data-status="all" onclick="filterOrders('all')">All</button>
-        <button class="filter-tab" data-status="unpaid" onclick="filterOrders('unpaid')">Unpaid</button>
-        <button class="filter-tab" data-status="to-ship" onclick="filterOrders('to-ship')">To Ship</button>
-        <button class="filter-tab" data-status="shipping" onclick="filterOrders('shipping')">Shipping</button>
-        <button class="filter-tab" data-status="completed" onclick="filterOrders('completed')">Completed</button>
-        <button class="filter-tab" data-status="return-refund" onclick="filterOrders('return-refund')">Return/Refund</button>
+        <button class="filter-tab" data-status="pending" onclick="filterOrders('pending')">Pending</button>
+        <button class="filter-tab" data-status="processing" onclick="filterOrders('processing')">Processing</button>
+        <button class="filter-tab" data-status="shipped" onclick="filterOrders('shipped')">Shipped</button>
+        <button class="filter-tab" data-status="delivered" onclick="filterOrders('delivered')">Delivered</button>
+        <button class="filter-tab" data-status="cancelled" onclick="filterOrders('cancelled')">Cancelled</button>
       </div>
 
       <div class="orders-grid" id="ordersGrid">
@@ -293,7 +293,7 @@
             <i class="fas fa-download"></i> Export Data
           </button>
           <button class="btn-action btn-primary" id="btnSyncMl" onclick="syncMLData()">
-            <i class="fas fa-sync"></i> Sync ML Config
+            <i class="fas fa-sync"></i> Refresh Smart Suggestions
           </button>
         </div>
       </div>
@@ -332,7 +332,7 @@
 
         <div class="chart-card">
           <div class="chart-header">
-            <h3>ML Product Tier Distribution</h3>
+            <h3>Smart Product Ratings Distribution</h3>
           </div>
           <div class="chart-placeholder">
             <canvas id="tierDistChart"></canvas>
@@ -527,6 +527,7 @@
           <div class="form-group">
             <label>Product Image</label>
             <input type="file" class="form-control" id="productImage" accept="image/*" onchange="previewProductImage(event)">
+            <small style="color: #94a3b8;">Upload a new image to replace the current one, or leave this blank to keep the existing product image.</small>
             <div id="imagePreview" style="margin-top: 10px; display: none;">
               <img id="previewImg" style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 2px solid #1e2a38;">
             </div>
@@ -600,7 +601,10 @@
   <div class="order-detail-modal" id="orderDetailModal">
     <div class="order-detail-content">
       <div class="order-detail-header">
-        <h3 id="orderDetailId">ADE-2025-001</h3>
+        <div>
+          <h3 id="orderDetailId">ADE-2025-001</h3>
+          <div class="order-detail-meta" id="orderDetailMeta">Order snapshot</div>
+        </div>
         <button class="modal-close" onclick="closeOrderDetail()">
           <i class="fas fa-times"></i>
         </button>
@@ -634,6 +638,32 @@
         <div class="order-info-section">
           <h4><i class="fas fa-box"></i> Products</h4>
           <div id="detailProducts">
+          </div>
+        </div>
+
+        <div class="order-info-section">
+          <h4><i class="fas fa-user-shield"></i> Customer & Delivery</h4>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Email</span>
+              <span class="info-value" id="detailCustomerEmail">admin@adegarage.com</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Phone</span>
+              <span class="info-value" id="detailCustomerPhone">+63 000 000 0000</span>
+            </div>
+            <div class="info-item info-item-wide">
+              <span class="info-label">Shipping Address</span>
+              <span class="info-value" id="detailShippingAddress">Address</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">City</span>
+              <span class="info-value" id="detailShippingCity">Cebu City</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Postal Code</span>
+              <span class="info-value" id="detailZipCode">6000</span>
+            </div>
           </div>
         </div>
 
@@ -679,31 +709,82 @@
       </div>
 
       <div class="order-detail-footer">
-        <div class="update-status-container">
-          <button class="btn-update-status" onclick="toggleStatusDropdown()">
-            <i class="fas fa-check-circle"></i> Update Status
-          </button>
-          <div class="status-dropdown" id="statusDropdown">
-            <button class="status-option" data-status="unpaid" onclick="updateOrderStatus('unpaid')">
-              <span class="status-badge unpaid">UNPAID</span>
-            </button>
-            <button class="status-option" data-status="to-ship" onclick="updateOrderStatus('to-ship')">
-              <span class="status-badge to-ship">TO SHIP</span>
-            </button>
-            <button class="status-option" data-status="shipping" onclick="updateOrderStatus('shipping')">
-              <span class="status-badge shipping">SHIPPING</span>
-            </button>
-            <button class="status-option" data-status="completed" onclick="updateOrderStatus('completed')">
-              <span class="status-badge completed">COMPLETED</span>
-            </button>
-            <button class="status-option" data-status="return-refund" onclick="updateOrderStatus('return-refund')">
-              <span class="status-badge return-refund">RETURN/REFUND</span>
-            </button>
-          </div>
-        </div>
+        <button class="btn-update-status" onclick="openOrderStatusModal()">
+          <i class="fas fa-check-circle"></i> Change Status
+        </button>
         <button class="btn-print" onclick="printOrder()">
           <i class="fas fa-print"></i> Print
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-modal" id="orderStatusModal">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3>Update Order Status</h3>
+        <button class="modal-close" onclick="closeOrderStatusModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="status-modal-summary">
+          <div class="status-modal-label">Selected Order</div>
+          <div class="status-modal-order" id="orderStatusOrderNumber">#ADE-2025-001</div>
+          <div class="status-modal-current" id="orderStatusCurrentBadge"></div>
+        </div>
+        <form class="settings-form" onsubmit="submitOrderStatusUpdate(event)">
+          <div class="form-group">
+            <label for="orderStatusSelect">New Status</label>
+            <select class="form-control" id="orderStatusSelect" required>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="status-modal-note">
+            <i class="fas fa-sparkles"></i>
+            <span>Use the dropdown to update the order without typing anything manually.</span>
+          </div>
+          <div class="modal-footer modal-footer-inline">
+            <button type="button" class="btn-action" onclick="closeOrderStatusModal()">Cancel</button>
+            <button type="submit" class="btn-action btn-primary" id="saveOrderStatusBtn">Save Status</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-modal" id="dashboardStatModal">
+    <div class="modal-dialog" style="max-width: 860px;">
+      <div class="modal-header">
+        <h3 id="dashboardStatTitle">Dashboard Detail</h3>
+        <button class="modal-close" onclick="closeDashboardStatModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="stat-modal-hero">
+          <div>
+            <div class="stat-modal-kicker" id="dashboardStatKicker">Overview</div>
+            <div class="stat-modal-value" id="dashboardStatValue">0</div>
+            <div class="stat-modal-description" id="dashboardStatDescription">Detailed breakdown</div>
+          </div>
+          <div class="stat-modal-badge" id="dashboardStatBadge">
+            <i class="fas fa-chart-line"></i>
+          </div>
+        </div>
+        <div class="stat-modal-grid" id="dashboardStatGrid"></div>
+        <div class="stat-modal-section">
+          <div class="stat-modal-section-title">What this includes</div>
+          <div class="stat-modal-list" id="dashboardStatList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action" onclick="closeDashboardStatModal()">Close</button>
+        <button class="btn-action btn-primary" id="dashboardStatActionBtn" onclick="handleDashboardStatAction()">Open Section</button>
       </div>
     </div>
   </div>

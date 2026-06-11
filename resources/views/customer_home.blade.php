@@ -54,22 +54,7 @@
                 <i class="fas fa-chevron-down filter-chevron" id="category-chevron"></i>
               </div>
               <div class="filter-content" id="category-content">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="brakes" data-filter-type="category">
-                  <label class="form-check-label" for="brakes">Brakes</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="tires" data-filter-type="category">
-                  <label class="form-check-label" for="tires">Tires</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="engine" data-filter-type="category">
-                  <label class="form-check-label" for="engine">Engine</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="accessories" data-filter-type="category">
-                  <label class="form-check-label" for="accessories">Accessories</label>
-                </div>
+                <!-- Dynamically populated by products.js after API load -->
               </div>
             </div>
 
@@ -82,7 +67,7 @@
                 <input id="priceRange" class="price-slider" type="range" min="50" max="15000" step="10" value="15000" />
                 <div class="price-values">
                   <div class="left-min">₱50</div>
-                  <div class="current" id="currentPrice">₱15,000</div>
+                  <div class="current" id="currentPrice">Loading...</div>
                 </div>
               </div>
             </div>
@@ -93,62 +78,29 @@
                 <i class="fas fa-chevron-down filter-chevron" id="brand-chevron"></i>
               </div>
               <div class="filter-content" id="brand-content">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="aeromax" data-filter-type="brand">
-                  <label class="form-check-label" for="aeromax">AeroMax</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="speedtech" data-filter-type="brand">
-                  <label class="form-check-label" for="speedtech">SpeedTech</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="motopro" data-filter-type="brand">
-                  <label class="form-check-label" for="motopro">MotoPro</label>
-                </div>
+                <!-- Dynamically populated by products.js after API load -->
               </div>
             </div>
 
-            <div class="filter-section mb-3">
-              <div class="filter-title-collapsible" onclick="toggleFilterSection('compatibility')">
-                <span>COMPATIBILITY</span>
-                <i class="fas fa-chevron-down filter-chevron" id="compatibility-chevron"></i>
-              </div>
-              <div class="filter-content" id="compatibility-content">
-                <select id="modelSelect" class="dropdown-custom">
-                  <option value="">Select Model</option>
-                  <option value="suzuki">Suzuki</option>
-                  <option value="yamaha">Yamaha</option>
-                  <option value="honda">Honda</option>
-                  <option value="kawasaki">Kawasaki</option>
-                </select>
-              </div>
-            </div>
+
           </div>
         </aside>
 
         <main class="col-lg-9">
+          <div class="product-toolbar">
+            <div class="product-count" id="productCountLabel">Showing 0 products</div>
+          </div>
           <div class="product-grid">
             <div class="row g-4" id="productGrid">
               <!-- JS dynamically loads database products here through products.js -->
+            </div>
+            <div class="no-products-message" id="noProductsMessage" style="display: none;">
+              No products match the selected filters.
             </div>
           </div>
         </main>
       </div>
 
-      <div class="recommendations-section-horizontal">
-        <div class="filter-title text-center mb-4">YOU MAY ALSO LIKE</div>
-        <div class="recommendations-horizontal-container">
-          <button class="recommendation-nav-btn prev-btn" onclick="scrollRecommendations('left')">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <div class="recommendations-horizontal-grid" id="recommendationsGrid">
-              <!-- JS dynamically loads JS recommendations here through products.js -->
-          </div>
-          <button class="recommendation-nav-btn next-btn" onclick="scrollRecommendations('right')">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 

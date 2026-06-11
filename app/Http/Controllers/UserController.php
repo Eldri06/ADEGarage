@@ -39,9 +39,23 @@ class UserController extends Controller
             // 4. Log into Laravel session
             Auth::login($localUser);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'redirect' => route('customer_home'),
+                ]);
+            }
+
             return redirect()->route('customer_home');
 
         } catch (\Throwable $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()
                 ->withErrors(['signup' => $e->getMessage()])
                 ->withInput($request->only('username', 'email'));
@@ -81,11 +95,27 @@ class UserController extends Controller
             Auth::login($localUser);
 
             // 6. Redirect based on role
-            return Auth::user()->is_admin
-                ? redirect()->route('admin')
-                : redirect()->route('customer_home');
+            $redirectRoute = Auth::user()->is_admin
+                ? route('admin')
+                : route('customer_home');
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'redirect' => $redirectRoute,
+                ]);
+            }
+
+            return redirect()->to($redirectRoute);
 
         } catch (\Throwable $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()
                 ->withErrors(['login' => $e->getMessage()])
                 ->withInput($request->only('email'));

@@ -85,13 +85,19 @@ class OrderController extends Controller
 
                 // Create order items
                 foreach ($cartItems as $cartItem) {
+                    $resolvedProductImage = Product::resolveImagePath($cartItem->product->image, [
+                        'name' => $cartItem->product->name,
+                        'brand' => $cartItem->product->brand,
+                        'category' => $cartItem->product->category,
+                    ]);
+
                     OrderItem::create([
                         'order_id' => $order->id,
                         'product_id' => $cartItem->product_id,
                         'product_name' => $cartItem->product->name,
                         'product_brand' => $cartItem->product->brand,
                         'product_category' => $cartItem->product->category,
-                        'product_image' => $cartItem->product->image,
+                        'product_image' => $resolvedProductImage,
                         'quantity' => $cartItem->quantity,
                         'price' => $cartItem->price,
                         'subtotal' => $cartItem->quantity * $cartItem->price
@@ -162,10 +168,16 @@ class OrderController extends Controller
                         'status' => $order->status,
                         'created_at' => $order->created_at->format('Y-m-d H:i:s'),
                         'items' => $order->orderItems->map(function ($item) {
+                            $resolvedProductImage = Product::resolveImagePath($item->product_image, [
+                                'name' => $item->product_name,
+                                'brand' => $item->product_brand,
+                                'category' => $item->product_category,
+                            ]);
+
                             return [
                                 'product_name' => $item->product_name,
                                 'product_brand' => $item->product_brand,
-                                'product_image' => $item->product_image,
+                                'product_image' => $resolvedProductImage,
                                 'quantity' => $item->quantity,
                                 'price' => $item->price,
                             ];
@@ -212,11 +224,17 @@ class OrderController extends Controller
                         'status' => $order->status,
                         'created_at' => $order->created_at->format('Y-m-d H:i:s'),
                         'items' => $order->orderItems->map(function ($item) {
+                            $resolvedProductImage = Product::resolveImagePath($item->product_image, [
+                                'name' => $item->product_name,
+                                'brand' => $item->product_brand,
+                                'category' => $item->product_category,
+                            ]);
+
                             return [
                                 'product_name' => $item->product_name,
                                 'product_brand' => $item->product_brand,
                                 'product_category' => $item->product_category,
-                                'product_image' => $item->product_image,
+                                'product_image' => $resolvedProductImage,
                                 'quantity' => $item->quantity,
                                 'price' => $item->price,
                                 'subtotal' => $item->subtotal
