@@ -49,6 +49,17 @@ class SupabaseAuthService
         return $this->requestJson('GET', '/auth/v1/user', null, $accessToken);
     }
 
+    public function adminCreateUser(string $email, string $password, array $data = []): array
+    {
+        // Must use service role key for Admin API endpoints
+        return $this->requestJson('POST', '/auth/v1/admin/users', [
+            'email'         => $email,
+            'password'      => $password,
+            'user_metadata' => $data,
+            'email_confirm' => true, // Auto-confirm email
+        ], $this->serviceRoleKey);
+    }
+
     // -------------------------------------------------------------------------
     // STORAGE — product-images bucket
     // -------------------------------------------------------------------------

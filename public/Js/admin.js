@@ -237,6 +237,15 @@ async function loadProductsData() {
       
       const imageUrl = product.image ? `/storage/${product.image}` : `https://via.placeholder.com/50/1a2332/1ee0ff?text=${product.name.substring(0, 2).toUpperCase()}`;
       
+      let tierBadge = '<span class="status-badge" style="background:#1e2a38;color:#64748b;">Unclassified</span>';
+      if (product.ml_tier === 'Premium') {
+        tierBadge = '<span class="status-badge" style="background:rgba(250, 204, 21, 0.15);color:#facc15;border:1px solid rgba(250, 204, 21, 0.3);"><i class="fas fa-crown"></i> Premium</span>';
+      } else if (product.ml_tier === 'Fast-Moving') {
+        tierBadge = '<span class="status-badge" style="background:rgba(30, 255, 142, 0.15);color:#1eff8e;border:1px solid rgba(30, 255, 142, 0.3);"><i class="fas fa-bolt"></i> Fast-Moving</span>';
+      } else if (product.ml_tier === 'Standard') {
+        tierBadge = '<span class="status-badge" style="background:rgba(30, 224, 255, 0.15);color:#1ee0ff;border:1px solid rgba(30, 224, 255, 0.3);"><i class="fas fa-box"></i> Standard</span>';
+      }
+
       return `
         <tr>
           <td><img src="${imageUrl}" class="product-img"></td>
@@ -246,6 +255,7 @@ async function loadProductsData() {
           <td>₱${parseFloat(product.price).toLocaleString()}</td>
           <td>${product.stock}</td>
           <td><span class="status-badge ${stockStatus}">${stockLabel}</span></td>
+          <td>${tierBadge}</td>
           <td>
             <button class="action-btn" title="Edit" onclick="editProduct(${product.id})"><i class="fas fa-edit"></i></button>
             <button class="action-btn delete" title="Delete" onclick="deleteProduct(${product.id})"><i class="fas fa-trash"></i></button>
@@ -664,215 +674,330 @@ function closeMessagePanel() {
   }
 }
 
-// CHARTS LINTE
+// CHARTS — Real data from API
 function initializeCharts() {
-  initializeSalesChart();
   initializeRevenueChart();
-  initializeCustomerChart();
+  initializePartTypeChart();
+  initializeBrandMarginsChart();
+  initializeTierDistChart();
 }
 
-function generateChartData(days) {
-  const labels = [];
-  const data = [];
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    data.push(Math.floor(Math.random() * 5000) + 2000);
-  }
-  
-  return { labels, data };
-}
+// ---- Theme colors ----
+const chartColors = {
+  cyan:    '#1ee0ff',
+  green:   '#1eff8e',
+  orange:  '#ff7a1f',
+  pink:    '#ff1e8e',
+  purple:  '#a855f7',
+  yellow:  '#facc15',
+  teal:    '#14b8a6',
+  grid:    'rgba(30, 224, 255, 0.1)',
+  text:    '#a7c0d8',
+};
 
-function initializeSalesChart() {
-  const ctx = document.getElementById('salesChart');
-  if (!ctx) return;
-  
-  const chartData = generateChartData(7);
-  
-  salesChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: chartData.labels,
-      datasets: [{
-        label: 'Sales',
-        data: chartData.data,
-        borderColor: '#1ee0ff',
-        backgroundColor: 'rgba(30, 224, 255, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color: '#a7c0d8',
-            callback: function(value) {
-              return '₱' + value.toLocaleString();
-            }
-          },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
-          }
-        },
-        x: {
-          ticks: {
-            color: '#a7c0d8'
-          },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
-          }
-        }
-      }
-    }
-  });
-}
+const tierColors = {
+  'Standard':    { bg: 'rgba(30, 224, 255, 0.7)',  border: '#1ee0ff'  },
+  'Fast-Moving': { bg: 'rgba(30, 255, 142, 0.7)',  border: '#1eff8e'  },
+  'Premium':     { bg: 'rgba(250, 204, 21, 0.7)',  border: '#facc15'  },
+};
 
-function updateSalesChart(days) {
-  if (!salesChart) return;
-  
-  const chartData = generateChartData(parseInt(days));
-  salesChart.data.labels = chartData.labels;
-  salesChart.data.datasets[0].data = chartData.data;
-  salesChart.update();
-  
-  showToast("success", "Sales chart updated");
-}
-
-function initializeRevenueChart() {
+// ---- Revenue Trend (bar chart from real monthly data) ----
+async function initializeRevenueChart() {
   const ctx = document.getElementById('revenueChart');
   if (!ctx) return;
-  
-  const chartData = generateChartData(7);
-  
-  revenueChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: chartData.labels,
-      datasets: [{
-        label: 'Revenue',
-        data: chartData.data,
-        backgroundColor: 'rgba(30, 224, 255, 0.6)',
-        borderColor: '#1ee0ff',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color: '#a7c0d8',
-            callback: function(value) {
-              return '₱' + value.toLocaleString();
-            }
+
+  try {
+    const res = await fetch('/api/admin/analytics/revenue-trend');
+    const data = await res.json();
+
+    const labels = data.map(d => d.month_name);
+    const revenue = data.map(d => parseFloat(d.revenue));
+    const profit = data.map(d => parseFloat(d.profit));
+
+    revenueChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Revenue',
+            data: revenue,
+            backgroundColor: 'rgba(30, 224, 255, 0.6)',
+            borderColor: chartColors.cyan,
+            borderWidth: 1,
+            borderRadius: 4,
           },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
+          {
+            label: 'Profit',
+            data: profit,
+            backgroundColor: 'rgba(30, 255, 142, 0.6)',
+            borderColor: chartColors.green,
+            borderWidth: 1,
+            borderRadius: 4,
           }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: chartColors.text } }
         },
-        x: {
-          ticks: {
-            color: '#a7c0d8'
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { color: chartColors.text, callback: v => '₱' + v.toLocaleString() },
+            grid: { color: chartColors.grid }
           },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
+          x: {
+            ticks: { color: chartColors.text },
+            grid: { color: chartColors.grid }
           }
         }
       }
-    }
-  });
+    });
+  } catch (e) {
+    console.error('Error loading revenue chart:', e);
+  }
 }
 
-function updateRevenueChart(days) {
-  if (!revenueChart) return;
-  
-  const chartData = generateChartData(parseInt(days));
-  revenueChart.data.labels = chartData.labels;
-  revenueChart.data.datasets[0].data = chartData.data;
-  revenueChart.update();
-  
-  showToast("success", "Revenue chart updated");
-}
-
-function initializeCustomerChart() {
-  const ctx = document.getElementById('customerChart');
+// ---- Part Type Breakdown (doughnut) ----
+let partTypeChart = null;
+async function initializePartTypeChart() {
+  const ctx = document.getElementById('partTypeChart');
   if (!ctx) return;
-  
-  const chartData = generateChartData(7);
-  const customerData = chartData.data.map(val => Math.floor(val / 100));
-  
-  customerChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: chartData.labels,
-      datasets: [{
-        label: 'New Customers',
-        data: customerData,
-        borderColor: '#1eff8e',
-        backgroundColor: 'rgba(30, 255, 142, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        }
+
+  try {
+    const res = await fetch('/api/admin/analytics/part-type-breakdown');
+    const data = await res.json();
+
+    const colors = [chartColors.cyan, chartColors.green, chartColors.orange, chartColors.pink, chartColors.purple, chartColors.yellow, chartColors.teal, '#6366f1', '#ec4899', '#84cc16'];
+
+    partTypeChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(d => d.part_type || 'Other'),
+        datasets: [{
+          data: data.map(d => parseFloat(d.total_revenue)),
+          backgroundColor: data.map((_, i) => colors[i % colors.length]),
+          borderColor: '#0f1720',
+          borderWidth: 2
+        }]
       },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color: '#a7c0d8'
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: chartColors.text, font: { size: 11 }, padding: 10 }
           },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
-          }
-        },
-        x: {
-          ticks: {
-            color: '#a7c0d8'
-          },
-          grid: {
-            color: 'rgba(30, 224, 255, 0.1)'
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.label}: ₱${parseFloat(ctx.raw).toLocaleString()}`
+            }
           }
         }
       }
-    }
-  });
+    });
+  } catch (e) {
+    console.error('Error loading part type chart:', e);
+  }
 }
 
-function updateCustomerChart(days) {
-  if (!customerChart) return;
-  
-  const chartData = generateChartData(parseInt(days));
-  const customerData = chartData.data.map(val => Math.floor(val / 100));
-  customerChart.data.labels = chartData.labels;
-  customerChart.data.datasets[0].data = customerData;
-  customerChart.update();
-  
-  showToast("success", "Customer chart updated");
+// ---- Brand Profit Margins (horizontal bar) ----
+let brandMarginsChart = null;
+async function initializeBrandMarginsChart() {
+  const ctx = document.getElementById('brandMarginsChart');
+  if (!ctx) return;
+
+  try {
+    const res = await fetch('/api/admin/analytics/brand-margins');
+    const data = await res.json();
+
+    // Take top 10 brands
+    const top = data.slice(0, 10);
+
+    brandMarginsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top.map(d => d.brand),
+        datasets: [{
+          label: 'Profit Margin %',
+          data: top.map(d => d.profit_margin),
+          backgroundColor: top.map(d =>
+            d.profit_margin >= 30 ? 'rgba(30, 255, 142, 0.7)' :
+            d.profit_margin >= 15 ? 'rgba(30, 224, 255, 0.7)' :
+            'rgba(255, 122, 31, 0.7)'
+          ),
+          borderColor: top.map(d =>
+            d.profit_margin >= 30 ? chartColors.green :
+            d.profit_margin >= 15 ? chartColors.cyan :
+            chartColors.orange
+          ),
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `Margin: ${ctx.raw}% | Revenue: ₱${top[ctx.dataIndex].total_revenue.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: { color: chartColors.text, callback: v => v + '%' },
+            grid: { color: chartColors.grid }
+          },
+          y: {
+            ticks: { color: chartColors.text, font: { size: 11 } },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Error loading brand margins chart:', e);
+  }
+}
+
+// ---- ML Tier Distribution (doughnut) ----
+let tierDistChart = null;
+async function initializeTierDistChart() {
+  const ctx = document.getElementById('tierDistChart');
+  if (!ctx) return;
+
+  try {
+    const res = await fetch('/api/admin/analytics/tier-distribution');
+    const data = await res.json();
+
+    if (data.length === 0) {
+      // No ML data yet — show placeholder
+      ctx.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-size:14px;text-align:center;padding:20px;">Run <code style="color:#1ee0ff;">php artisan ml:classify-products</code> to generate tier data</div>';
+      return;
+    }
+
+    const labels = data.map(d => d.ml_tier || 'Unclassified');
+    const counts = data.map(d => d.count);
+    const bgColors = labels.map(l => (tierColors[l] || { bg: 'rgba(148,163,184,0.5)' }).bg);
+    const bdColors = labels.map(l => (tierColors[l] || { border: '#94a3b8' }).border);
+
+    tierDistChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data: counts,
+          backgroundColor: bgColors,
+          borderColor: '#0f1720',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: chartColors.text, font: { size: 12 }, padding: 12 }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Error loading tier dist chart:', e);
+  }
+}
+
+// ---- Top Products Monthly (table) ----
+async function loadTopProductsMonthly(month) {
+  const table = document.getElementById('topProductsTable');
+  if (!table) return;
+
+  try {
+    let url = '/api/admin/analytics/top-products-monthly';
+    if (month) url += `?month=${month}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    // Flatten all months into one list
+    let allProducts = [];
+    if (Array.isArray(data)) {
+      allProducts = data;
+    } else {
+      Object.values(data).forEach(products => {
+        allProducts = allProducts.concat(products);
+      });
+    }
+
+    // Sort by total quantity and take top 15
+    allProducts.sort((a, b) => b.total_quantity - a.total_quantity);
+    const top = allProducts.slice(0, 15);
+
+    if (top.length === 0) {
+      table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b;">No data for selected month</td></tr>';
+      return;
+    }
+
+    table.innerHTML = top.map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${p.product}</td>
+        <td>${p.brand || '-'}</td>
+        <td>${p.part_type || '-'}</td>
+        <td>${parseInt(p.total_quantity).toLocaleString()}</td>
+        <td>₱${parseFloat(p.total_revenue).toLocaleString()}</td>
+        <td>₱${parseFloat(p.total_profit).toLocaleString()}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('Error loading top products:', e);
+  }
+}
+
+// ---- Dead Stock Alert (table) ----
+async function loadDeadStock() {
+  const table = document.getElementById('deadStockTable');
+  if (!table) return;
+
+  try {
+    const res = await fetch('/api/admin/analytics/dead-stock');
+    const data = await res.json();
+
+    if (data.length === 0) {
+      table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#1eff8e;"><i class="fas fa-check-circle"></i> No dead stock detected</td></tr>';
+      return;
+    }
+
+    table.innerHTML = data.map(d => {
+      const qty = parseInt(d.total_quantity);
+      const statusClass = qty === 0 ? 'out-of-stock' : qty <= 1 ? 'low-stock' : 'low-stock';
+      const statusLabel = qty === 0 ? 'No Sales' : qty <= 1 ? 'Critical' : 'Slow Moving';
+
+      return `
+        <tr>
+          <td>${d.product}</td>
+          <td>${d.brand || '-'}</td>
+          <td>${d.part_type || '-'}</td>
+          <td>${qty}</td>
+          <td>₱${parseFloat(d.total_revenue).toLocaleString()}</td>
+          <td>${d.last_sale_date || '-'}</td>
+          <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error('Error loading dead stock:', e);
+  }
 }
 
 
@@ -1181,29 +1306,8 @@ function loadInventoryData() {
 }
 
 function loadAnalyticsData() {
-  const topProductsTable = document.getElementById("topProductsTable");
-  if (!topProductsTable) return;
-
-
-  const sortedProducts = [...productsData].sort((a, b) => b.stock - a.stock);
-  const topProducts = sortedProducts.slice(0, 5);
-
-  topProductsTable.innerHTML = topProducts.map((product, index) => {
-    const unitsSold = Math.floor(Math.random() * (product.stock > 50 ? 200 : product.stock)) + 50;
-    const revenue = unitsSold * product.price;
-    const growth = Math.floor(Math.random() * 20) - 5; 
-    
-    return `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${product.name}</td>
-        <td>${capitalizeFirst(product.category)}</td>
-        <td>${unitsSold}</td>
-        <td>₱${revenue.toLocaleString()}</td>
-        <td><span class="stat-change ${growth >= 0 ? 'positive' : 'negative'}"><i class="fas fa-arrow-${growth >= 0 ? 'up' : 'down'}"></i> ${Math.abs(growth)}%</span></td>
-      </tr>
-    `;
-  }).join("");
+  loadTopProductsMonthly('');
+  loadDeadStock();
 }
 
 
@@ -1884,9 +1988,8 @@ function closeNotificationPanel() {
 // Load dashboard statistics
 async function loadDashboardStats() {
   try {
-    // Load orders to calculate stats
-    const ordersResponse = await fetch('/api/orders');
-    const ordersData = await ordersResponse.json();
+    // Load analytics summary
+    const analyticsResponse = await fetch('/api/admin/analytics');
     
     // Load products count
     const productsResponse = await fetch('/api/admin/products');
@@ -1900,19 +2003,20 @@ async function loadDashboardStats() {
       usersCount = usersData.length || 0;
     }
     
-    if (ordersData.success) {
-      const orders = ordersData.orders;
+    if (analyticsResponse.ok) {
+      const analyticsData = await analyticsResponse.json();
       
       // Calculate total revenue
-      const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total), 0);
+      const totalRevenue = analyticsData.total_sales || 0;
       document.getElementById('totalRevenue').textContent = `₱${totalRevenue.toLocaleString()}`;
       
-      // Total orders
-      document.getElementById('totalOrders').textContent = orders.length.toLocaleString();
+      // Total orders (record count)
+      const totalOrders = analyticsData.record_count || 0;
+      document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
       
       // Update change indicators (simplified - just show current data)
-      document.getElementById('revenueChange').innerHTML = '<i class="fas fa-check"></i> Current total';
-      document.getElementById('ordersChange').innerHTML = '<i class="fas fa-check"></i> Total orders';
+      document.getElementById('revenueChange').innerHTML = '<i class="fas fa-check"></i> Overall tracked';
+      document.getElementById('ordersChange').innerHTML = '<i class="fas fa-check"></i> Historical logs';
     }
     
     // Total customers
@@ -1966,6 +2070,44 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load notifications on page load
   loadNotifications();
   
-  // Refresh notifications every 30 seconds
+// Refresh notifications every 30 seconds
   setInterval(loadNotifications, 30000);
 });
+
+// Function to trigger Laravel backend Artisan command securely
+async function syncMLData() {
+  const btn = document.getElementById('btnSyncMl');
+  const icon = btn.querySelector('i');
+  
+  if (btn.disabled) return;
+  
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Syncing...`;
+  
+  try {
+    const response = await fetch('/api/admin/ml/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
+      alert("✅ ML Analytics updated successfully!");
+      // reload the charts
+      loadDashboardData();
+    } else {
+      alert("❌ " + (data.message || "Failed to trigger the Sync protocol."));
+      console.error(data.output);
+    }
+  } catch (err) {
+    console.error("Critical failure attempting to trigger the Sync handler:", err);
+    alert("❌ Error: Unhandled network disconnect while triggering the task.");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fas fa-sync"></i> Sync ML Config`;
+  }
+}

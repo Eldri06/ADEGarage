@@ -26,6 +26,7 @@ async function loadProductsFromDatabase() {
                data-variations='${product.variations ? JSON.stringify(product.variations) : '{}'}'
                data-specifications='${product.specifications ? JSON.stringify(product.specifications) : '{}'}'>
             <div class="product-card position-relative">
+              ${product.ml_tier === 'High Demand' || product.ml_tier === 'High Value' ? '<div class="ai-badge">⭐ AI RECOMMENDED</div>' : ''}
               <img class="product-image" src="${imageUrl}" alt="${product.name}">
               <div class="product-title">${product.name}</div>
               <div class="product-details">

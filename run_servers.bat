@@ -1,0 +1,6 @@
+@echo off
+echo Starting ML Microservice...
+start "ADEGarage ML Server" cmd /c "python ml_server.py"
+
+echo Starting Laravel Application...
+php artisan serve

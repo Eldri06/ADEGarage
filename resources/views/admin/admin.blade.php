@@ -148,65 +148,7 @@
         </div>
       </div>
 
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-header">
-            <h3>Sales Overview</h3>
-            <select class="chart-filter" id="salesChartFilter" onchange="updateSalesChart(this.value)">
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="90">Last 3 Months</option>
-            </select>
-          </div>
-          <div class="chart-placeholder">
-            <canvas id="salesChart"></canvas>
-          </div>
-        </div>
 
-        <div class="chart-card">
-          <div class="chart-header">
-            <h3>Top Categories</h3>
-          </div>
-          <div class="category-list">
-            <div class="category-item">
-              <div class="category-info">
-                <span class="category-name">Brakes</span>
-                <span class="category-sales">₱85,420</span>
-              </div>
-              <div class="category-bar">
-                <div class="category-progress" style="width: 85%"></div>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-info">
-                <span class="category-name">Tires</span>
-                <span class="category-sales">₱72,350</span>
-              </div>
-              <div class="category-bar">
-                <div class="category-progress" style="width: 72%"></div>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-info">
-                <span class="category-name">Engine</span>
-                <span class="category-sales">₱95,680</span>
-              </div>
-              <div class="category-bar">
-                <div class="category-progress" style="width: 95%"></div>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-info">
-                <span class="category-name">Accessories</span>
-                <span class="category-sales">₱58,240</span>
-              </div>
-              <div class="category-bar">
-                <div class="category-progress" style="width: 58%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div class="data-card">
         <div class="card-header">
@@ -273,6 +215,7 @@
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
+                <th>ML Tier</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -349,18 +292,17 @@
           <button class="btn-action" onclick="exportAnalytics()">
             <i class="fas fa-download"></i> Export Data
           </button>
+          <button class="btn-action btn-primary" id="btnSyncMl" onclick="syncMLData()">
+            <i class="fas fa-sync"></i> Sync ML Config
+          </button>
         </div>
       </div>
 
+      <!-- Row 1: Revenue Trend + Part Type Breakdown -->
       <div class="charts-row">
         <div class="chart-card">
           <div class="chart-header">
-            <h3>Revenue Trend</h3>
-            <select class="chart-filter" id="revenueChartFilter" onchange="updateRevenueChart(this.value)">
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="90">Last 3 Months</option>
-            </select>
+            <h3>Monthly Revenue Trend</h3>
           </div>
           <div class="chart-placeholder">
             <canvas id="revenueChart"></canvas>
@@ -369,22 +311,56 @@
 
         <div class="chart-card">
           <div class="chart-header">
-            <h3>Customer Growth</h3>
-            <select class="chart-filter" id="customerChartFilter" onchange="updateCustomerChart(this.value)">
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="90">Last 3 Months</option>
-            </select>
+            <h3>Sales by Part Type</h3>
           </div>
           <div class="chart-placeholder">
-            <canvas id="customerChart"></canvas>
+            <canvas id="partTypeChart"></canvas>
           </div>
         </div>
       </div>
 
+      <!-- Row 2: Brand Margins + ML Tier Distribution -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Brand Profit Margins</h3>
+          </div>
+          <div class="chart-placeholder">
+            <canvas id="brandMarginsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>ML Product Tier Distribution</h3>
+          </div>
+          <div class="chart-placeholder">
+            <canvas id="tierDistChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Top Products per Month -->
       <div class="data-card">
         <div class="card-header">
-          <h3>Top Selling Products</h3>
+          <h3>Top Products per Month</h3>
+          <div class="filter-group">
+            <select class="filter-select" id="topProductsMonthFilter" onchange="loadTopProductsMonthly(this.value)">
+              <option value="">All Months</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -392,13 +368,38 @@
               <tr>
                 <th>Rank</th>
                 <th>Product</th>
-                <th>Category</th>
+                <th>Brand</th>
+                <th>Part Type</th>
                 <th>Units Sold</th>
                 <th>Revenue</th>
-                <th>Growth</th>
+                <th>Profit</th>
               </tr>
             </thead>
             <tbody id="topProductsTable">
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Row 4: Dead Stock Alert -->
+      <div class="data-card">
+        <div class="card-header">
+          <h3><i class="fas fa-exclamation-triangle" style="color: #ff7a1f; margin-right: 8px;"></i>Dead Stock Alert</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Brand</th>
+                <th>Part Type</th>
+                <th>Total Sold</th>
+                <th>Revenue</th>
+                <th>Last Sale</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="deadStockTable">
             </tbody>
           </table>
         </div>

@@ -10,7 +10,9 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::where('status', 'active')->get();
+        $products = Product::where(function ($q) {
+            $q->where('status', 'active')->orWhereNull('status');
+        })->get();
         return response()->json($products);
     }
 

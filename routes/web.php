@@ -17,7 +17,7 @@ use App\Http\Controllers\SalesAnalyticsController;
 
 Route::get('/', function () {
     return view('home_landing');
-});
+})->name('login');
 
 Route::post('/signup', [UserController::class, 'signup']);
 Route::post('/login',  [UserController::class, 'login']);
@@ -74,7 +74,17 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/api/orders',               [OrderController::class, 'index'])->name('orders.index');
     Route::put('/api/orders/{id}/status',   [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
 
-    Route::get('/api/admin/users',          [AdminController::class, 'index'])->name('admin.users');
+    Route::get('/api/admin/users',          [App\Http\Controllers\UserController::class, 'index'])->name('admin.users');
     Route::get('/api/admin/analytics',      [SalesAnalyticsController::class, 'summary'])->name('admin.analytics');
     Route::get('/api/admin/sales-history',  [SalesAnalyticsController::class, 'index'])->name('admin.sales-history');
+
+    // ML Analytics endpoints
+    Route::get('/api/admin/analytics/top-products-monthly', [SalesAnalyticsController::class, 'topProductsMonthly'])->name('admin.analytics.top-products');
+    Route::get('/api/admin/analytics/brand-margins',        [SalesAnalyticsController::class, 'brandMargins'])->name('admin.analytics.brand-margins');
+    Route::get('/api/admin/analytics/dead-stock',           [SalesAnalyticsController::class, 'deadStock'])->name('admin.analytics.dead-stock');
+    Route::get('/api/admin/analytics/revenue-trend',        [SalesAnalyticsController::class, 'revenueTrend'])->name('admin.analytics.revenue-trend');
+    Route::get('/api/admin/analytics/tier-distribution',    [SalesAnalyticsController::class, 'tierDistribution'])->name('admin.analytics.tier-distribution');
+    Route::get('/api/admin/analytics/part-type-breakdown',  [SalesAnalyticsController::class, 'partTypeBreakdown'])->name('admin.analytics.part-type');
+    Route::post('/api/admin/ml/predict-tier',               [SalesAnalyticsController::class, 'predictTier'])->name('admin.ml.predict-tier');
+    Route::post('/api/admin/ml/sync',                       [SalesAnalyticsController::class, 'runClassification'])->name('admin.ml.sync');
 });

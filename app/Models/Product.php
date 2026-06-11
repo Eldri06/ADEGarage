@@ -23,7 +23,9 @@ class Product extends Model
         'specifications',
         'in_the_box',
         'warranty_info',
-        'status'
+        'status',
+        'ml_tier',
+        'demand_score',
     ];
 
     protected $casts = [

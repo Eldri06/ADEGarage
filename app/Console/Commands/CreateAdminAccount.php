@@ -38,15 +38,15 @@ class CreateAdminAccount extends Command
             return 1;
         }
 
-        $this->info("Provisioning master admin account for {$email}...");
+        $uniqueUsername = 'Admin_' . substr(md5($email), 0, 8);
 
         try {
             // 1. Create the user directly in Supabase using backend APIs
-            $supabase->signUp($email, $password, ['username' => 'MasterAdmin']);
+            $supabase->adminCreateUser($email, $password, ['username' => $uniqueUsername]);
 
             // 2. Synchronize the local database
             $user = User::firstOrNew(['email' => $email]);
-            $user->username = 'MasterAdmin';
+            $user->username = $uniqueUsername;
             $user->name = 'Master Admin';
             // Scramble the local password since Supabase handles true authentication
             $user->password = bcrypt(Str::random(32)); 
