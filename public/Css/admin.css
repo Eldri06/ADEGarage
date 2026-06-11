@@ -335,14 +335,8 @@
 }
 
 .stat-card-clickable::after {
-  content: "View details";
-  position: absolute;
-  top: 16px;
-  right: 18px;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(167, 192, 216, 0.72);
+  content: "";
+  display: none;
 }
 
 .stat-card-clickable:focus-visible {
@@ -421,6 +415,8 @@
   border: 1px solid #1e2a38;
   border-radius: 12px;
   padding: 24px;
+  min-height: 360px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
 .chart-header {
@@ -450,10 +446,17 @@
 }
 
 .chart-placeholder {
+  height: 300px;
   min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+
+.chart-placeholder canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .category-list {
@@ -1946,12 +1949,6 @@
 
   .stat-card {
     flex-direction: row;
-  }
-
-  .stat-card-clickable::after {
-    position: static;
-    display: inline-block;
-    margin-top: 10px;
   }
 
   .stat-modal-hero {

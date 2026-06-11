@@ -88,6 +88,9 @@
       <div class="section-header">
         <h2 class="section-title">Dashboard</h2>
         <div class="section-actions">
+          <button class="btn-action" onclick="exportDashboard()">
+            <i class="fas fa-download"></i> Export
+          </button>
           <button class="btn-action" onclick="refreshDashboard()">
             <i class="fas fa-sync-alt"></i> Refresh
           </button>
@@ -179,6 +182,9 @@
       <div class="section-header">
         <h2 class="section-title">Products</h2>
         <div class="section-actions">
+          <button class="btn-action" onclick="exportProducts()">
+            <i class="fas fa-download"></i> Export
+          </button>
           <button class="btn-action btn-primary" onclick="openProductModal()">
             <i class="fas fa-plus"></i> Add Product
           </button>
@@ -253,6 +259,9 @@
       <div class="section-header">
         <h2 class="section-title">Inventory</h2>
         <div class="section-actions">
+          <button class="btn-action" onclick="exportInventory()">
+            <i class="fas fa-download"></i> Export
+          </button>
           <button class="btn-action btn-primary" onclick="updateInventory()">
             <i class="fas fa-sync-alt"></i> Update
           </button>

@@ -71,13 +71,17 @@ class ProductController extends Controller
             $product = Product::findOrFail($id);
 
             $request->validate([
-                'name'     => 'required|string|max:255',
-                'category' => 'required|string',
-                'brand'    => 'required|string',
-                'price'    => 'required|numeric|min:0',
-                'stock'    => 'required|integer|min:0',
-                'image'    => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
-                'models'   => 'nullable|array',
+                'name'        => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'full_description' => 'nullable|string',
+                'category'    => 'required|string',
+                'brand'       => 'required|string',
+                'price'       => 'required|numeric|min:0',
+                'stock'       => 'required|integer|min:0',
+                'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+                'models'      => 'nullable|array',
+                'variations'  => 'nullable|string',
+                'specifications' => 'nullable|string',
             ]);
 
             $data = $request->except('image');
@@ -91,6 +95,13 @@ class ProductController extends Controller
                 $data['image'] = $supabase->uploadProductImage($request->file('image'));
             }
 
+            if ($request->has('variations') && $request->variations) {
+                $data['variations'] = json_decode($request->variations, true);
+            }
+            if ($request->has('specifications') && $request->specifications) {
+                $data['specifications'] = json_decode($request->specifications, true);
+            }
+
             $product->update($data);
 
             return response()->json([
@@ -99,6 +110,8 @@ class ProductController extends Controller
                 'product' => $product,
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error updating product: ' . $e->getMessage()], 500);
         }

@@ -128,6 +128,9 @@ let nextProductId = 9;
 let currentAdminSection = "dashboard";
 let dashboardSummaryData = {};
 let dashboardStatActionSection = "dashboard";
+const ADMIN_CACHE_TTL = 30000;
+let productsLoadedAt = 0;
+let ordersLoadedAt = 0;
 
 function getActiveAdminSection() {
   const activeSection = document.querySelector(".admin-section.active");
@@ -174,37 +177,31 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
   if (sectionName === "dashboard") {
     await loadOrders();
     await loadDashboardData();
-    await loadDashboardStats();
-    await loadNotifications();
+    await Promise.all([loadDashboardStats(), loadNotifications()]);
     return;
   }
 
   if (sectionName === "products") {
     await loadProductsData();
-    await loadDashboardStats();
     return;
   }
 
   if (sectionName === "inventory") {
     await loadProductsData();
     loadInventoryData();
-    await loadDashboardStats();
     return;
   }
 
   if (sectionName === "orders") {
     await loadOrders();
-    await loadDashboardData();
-    await loadDashboardStats();
-    await loadNotifications();
     return;
   }
 
   if (sectionName === "analytics") {
     await loadProductsData();
-    loadAnalyticsData();
+    await loadAnalyticsData();
     destroyAnalyticsCharts();
-    initializeCharts();
+    await initializeCharts();
   }
 }
 
@@ -344,10 +341,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeNotifications();
   initializeMessages();
   await refreshAdminSection("dashboard");
-  await loadProductsData();
-  loadInventoryData();
-  loadAnalyticsData();
-  initializeCharts();
 });
 
 
@@ -482,6 +475,106 @@ function filterProductsByBrand(brand) {
   loadProductsData();
 }
 
+async function ensureProductsData(force = false) {
+  if (!force && productsData.length > 0 && Date.now() - productsLoadedAt < ADMIN_CACHE_TTL) {
+    return productsData;
+  }
+
+  const response = await fetch('/api/admin/products');
+  productsData = await response.json();
+  productsLoadedAt = Date.now();
+  populateAdminProductFilters();
+  return productsData;
+}
+
+function productMatchesFilterValue(actualValue, filterValue) {
+  if (filterValue === "all") return true;
+
+  const actual = normalizeAdminValue(actualValue);
+  const selected = normalizeAdminValue(filterValue);
+  return actual === selected || actual.includes(selected) || selected.includes(actual);
+}
+
+function renderProductsData() {
+  const productsTable = document.getElementById("productsTable");
+  if (!productsTable) return;
+
+  const filteredProducts = productsData.filter((product) =>
+    productMatchesFilterValue(product.category, currentCategoryFilter) &&
+    productMatchesFilterValue(product.brand, currentBrandFilter)
+  );
+
+  if (filteredProducts.length === 0) {
+    productsTable.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#64748b;">No products match the selected filters</td></tr>';
+    updateProductCount();
+    return;
+  }
+
+  productsTable.innerHTML = filteredProducts.map(product => {
+    let stockStatus, stockLabel;
+    if (Number(product.stock) === 0) {
+      stockStatus = 'out-of-stock';
+      stockLabel = 'Out of Stock';
+    } else if (Number(product.stock) <= 20) {
+      stockStatus = 'low-stock';
+      stockLabel = 'Low Stock';
+    } else {
+      stockStatus = 'in-stock';
+      stockLabel = 'In Stock';
+    }
+
+    const imageUrl = resolveProductImageUrl(product);
+    let tierBadge = '<span class="status-badge" style="background:#1e2a38;color:#64748b;">Unclassified</span>';
+    if (product.ml_tier === 'Premium') {
+      tierBadge = '<span class="status-badge" style="background:rgba(250, 204, 21, 0.15);color:#facc15;border:1px solid rgba(250, 204, 21, 0.3);"><i class="fas fa-crown"></i> Premium</span>';
+    } else if (product.ml_tier === 'Fast-Moving') {
+      tierBadge = '<span class="status-badge" style="background:rgba(30, 255, 142, 0.15);color:#1eff8e;border:1px solid rgba(30, 255, 142, 0.3);"><i class="fas fa-bolt"></i> Fast-Moving</span>';
+    } else if (product.ml_tier === 'Standard') {
+      tierBadge = '<span class="status-badge" style="background:rgba(30, 224, 255, 0.15);color:#1ee0ff;border:1px solid rgba(30, 224, 255, 0.3);"><i class="fas fa-box"></i> Standard</span>';
+    }
+
+    return `
+      <tr>
+        <td><img src="${imageUrl}" class="product-img"></td>
+        <td>${escapeAdminHtml(product.name)}</td>
+        <td>${escapeAdminHtml(capitalizeFirst(product.category || ""))}</td>
+        <td>${escapeAdminHtml(capitalizeFirst(product.brand || ""))}</td>
+        <td>${formatCurrency(product.price)}</td>
+        <td>${Number(product.stock || 0).toLocaleString()}</td>
+        <td><span class="status-badge ${stockStatus}">${stockLabel}</span></td>
+        <td>${tierBadge}</td>
+        <td>
+          <button class="action-btn" title="Edit" onclick="editProduct(${product.id})"><i class="fas fa-edit"></i></button>
+          <button class="action-btn delete" title="Delete" onclick="deleteProduct(${product.id})"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  updateProductCount();
+  applyAdminSearchToSection("products");
+}
+
+async function loadProductsData(force = false) {
+  try {
+    await ensureProductsData(force);
+    renderProductsData();
+  } catch (error) {
+    console.error('Error loading products:', error);
+    showToast("error", "Failed to load products");
+  }
+}
+
+function filterProductsByCategory(category) {
+  currentCategoryFilter = category;
+  renderProductsData();
+}
+
+function filterProductsByBrand(brand) {
+  currentBrandFilter = brand;
+  renderProductsData();
+}
+
 function openProductModal(productId = null) {
   const modal = document.getElementById("productModal");
   const modalTitle = document.getElementById("productModalTitle");
@@ -613,7 +706,8 @@ async function saveProduct() {
       showToast("success", data.message);
       currentEditingProductId = null; // Reset the editing ID
       closeProductModal();
-      await refreshAdminSection(getActiveAdminSection());
+      productsLoadedAt = 0;
+      await loadProductsData(true);
     } else {
       // Show detailed error message
       let errorMsg = data.message || "Failed to save product";
@@ -650,7 +744,8 @@ async function deleteProduct(productId) {
 
       if (data.success) {
         showToast("success", data.message);
-        await refreshAdminSection(getActiveAdminSection());
+        productsLoadedAt = 0;
+        await loadProductsData(true);
       } else {
         showToast("error", "Failed to delete product");
       }
@@ -988,11 +1083,22 @@ function closeMessagePanel() {
 }
 
 // CHARTS — Real data from API
-function initializeCharts() {
-  initializeRevenueChart();
-  initializePartTypeChart();
-  initializeBrandMarginsChart();
-  initializeTierDistChart();
+async function initializeCharts() {
+  if (window.Chart) {
+    Chart.defaults.color = chartColors.text;
+    Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(8, 13, 20, 0.94)';
+    Chart.defaults.plugins.tooltip.borderColor = 'rgba(30, 224, 255, 0.35)';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.padding = 12;
+  }
+
+  await Promise.all([
+    initializeRevenueChart(),
+    initializePartTypeChart(),
+    initializeBrandMarginsChart(),
+    initializeTierDistChart()
+  ]);
 }
 
 // ---- Theme colors ----
@@ -1014,6 +1120,13 @@ const tierColors = {
   'Premium':     { bg: 'rgba(250, 204, 21, 0.7)',  border: '#facc15'  },
 };
 
+function chartGridOptions() {
+  return {
+    color: 'rgba(167, 192, 216, 0.08)',
+    drawBorder: false
+  };
+}
+
 // ---- Revenue Trend (bar chart from real monthly data) ----
 async function initializeRevenueChart() {
   const ctx = document.getElementById('revenueChart');
@@ -1027,44 +1140,66 @@ async function initializeRevenueChart() {
     const revenue = data.map(d => parseFloat(d.revenue));
     const profit = data.map(d => parseFloat(d.profit));
 
+    const revenueGradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    revenueGradient.addColorStop(0, 'rgba(30, 224, 255, 0.36)');
+    revenueGradient.addColorStop(1, 'rgba(30, 224, 255, 0.02)');
+
     revenueChart = new Chart(ctx, {
-      type: 'bar',
+      type: 'line',
       data: {
         labels,
         datasets: [
           {
             label: 'Revenue',
             data: revenue,
-            backgroundColor: 'rgba(30, 224, 255, 0.6)',
+            backgroundColor: revenueGradient,
             borderColor: chartColors.cyan,
-            borderWidth: 1,
-            borderRadius: 4,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#0f1720',
+            pointBorderColor: chartColors.cyan,
+            pointBorderWidth: 2,
+            tension: 0.35,
+            fill: true,
           },
           {
             label: 'Profit',
             data: profit,
-            backgroundColor: 'rgba(30, 255, 142, 0.6)',
+            backgroundColor: 'rgba(30, 255, 142, 0.08)',
             borderColor: chartColors.green,
-            borderWidth: 1,
-            borderRadius: 4,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#0f1720',
+            pointBorderColor: chartColors.green,
+            pointBorderWidth: 2,
+            tension: 0.35,
+            fill: false,
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { labels: { color: chartColors.text } }
+          legend: { position: 'top', labels: { color: chartColors.text, usePointStyle: true } },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
+            }
+          }
         },
         scales: {
           y: {
             beginAtZero: true,
             ticks: { color: chartColors.text, callback: v => '₱' + v.toLocaleString() },
-            grid: { color: chartColors.grid }
+            grid: chartGridOptions()
           },
           x: {
             ticks: { color: chartColors.text },
-            grid: { color: chartColors.grid }
+            grid: { display: false }
           }
         }
       }
@@ -1100,10 +1235,11 @@ async function initializePartTypeChart() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: '62%',
         plugins: {
           legend: {
-            position: 'right',
-            labels: { color: chartColors.text, font: { size: 11 }, padding: 10 }
+            position: 'bottom',
+            labels: { color: chartColors.text, font: { size: 11 }, padding: 14, usePointStyle: true }
           },
           tooltip: {
             callbacks: {
@@ -1156,6 +1292,7 @@ async function initializeBrandMarginsChart() {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: 'y',
+        interaction: { mode: 'nearest', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1168,7 +1305,7 @@ async function initializeBrandMarginsChart() {
           x: {
             beginAtZero: true,
             ticks: { color: chartColors.text, callback: v => v + '%' },
-            grid: { color: chartColors.grid }
+            grid: chartGridOptions()
           },
           y: {
             ticks: { color: chartColors.text, font: { size: 11 } },
@@ -1217,10 +1354,11 @@ async function initializeTierDistChart() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: '58%',
         plugins: {
           legend: {
-            position: 'right',
-            labels: { color: chartColors.text, font: { size: 12 }, padding: 12 }
+            position: 'bottom',
+            labels: { color: chartColors.text, font: { size: 12 }, padding: 14, usePointStyle: true }
           }
         }
       }
@@ -1591,7 +1729,7 @@ function exportOrders() {
         `"${String(order.customer_name || "Guest").replace(/"/g, '""')}"`,
         `"${String(order.customer_email || "").replace(/"/g, '""')}"`,
         `"${String(order.customer_phone || "").replace(/"/g, '""')}"`,
-        `"${order.items.map((item) => `${item.product_name} (${item.quantity})`).join("; ").replace(/"/g, '""')}"`,
+        `"${(Array.isArray(order.items) ? order.items : []).map((item) => `${item.product_name} (${item.quantity})`).join("; ").replace(/"/g, '""')}"`,
         Number(order.total || 0),
         `"${String(order.payment_method || "").replace(/"/g, '""')}"`,
         capitalizeFirst(order.status || "pending"),
@@ -1686,9 +1824,11 @@ function loadInventoryData() {
   applyAdminSearchToSection("inventory");
 }
 
-function loadAnalyticsData() {
-  loadTopProductsMonthly('');
-  loadDeadStock();
+async function loadAnalyticsData() {
+  await Promise.all([
+    loadTopProductsMonthly(''),
+    loadDeadStock()
+  ]);
 }
 
 
@@ -1784,6 +1924,89 @@ TOP PRODUCTS (by Inventory Value)
   window.URL.revokeObjectURL(url);
 
   showToast("success", "Report generated and downloaded!");
+}
+
+function csvEscape(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename, headers, rows) {
+  const csvContent = [
+    headers.map(csvEscape).join(","),
+    ...rows.map((row) => row.map(csvEscape).join(","))
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+function exportDashboard() {
+  const today = new Date().toISOString().split('T')[0];
+  const summary = dashboardSummaryData || {};
+  const recentOrders = realOrdersData.slice(0, 5);
+  const rows = [
+    ['Total Revenue', summary.totalRevenue || 0],
+    ['Total Orders', summary.totalOrders || realOrdersData.length],
+    ['Total Customers', summary.totalCustomers || 0],
+    ['Total Products', summary.totalProducts || productsData.length],
+    ['Recent Orders Shown', recentOrders.length],
+  ];
+
+  downloadCsv(`ADE-Garage-Dashboard-${today}.csv`, ['Metric', 'Value'], rows);
+  showToast("success", "Dashboard exported successfully!");
+}
+
+function exportProducts() {
+  const filteredProducts = productsData.filter((product) =>
+    productMatchesFilterValue(product.category, currentCategoryFilter) &&
+    productMatchesFilterValue(product.brand, currentBrandFilter)
+  );
+  const rows = filteredProducts.map((product) => [
+    product.name,
+    capitalizeFirst(product.category || ""),
+    capitalizeFirst(product.brand || ""),
+    Number(product.price || 0),
+    Number(product.stock || 0),
+    product.ml_tier || 'Unclassified',
+    product.description || ''
+  ]);
+
+  downloadCsv(
+    `ADE-Garage-Products-${new Date().toISOString().split('T')[0]}.csv`,
+    ['Name', 'Category', 'Brand', 'Price', 'Stock', 'Smart Rating', 'Description'],
+    rows
+  );
+  showToast("success", "Products exported successfully!");
+}
+
+function exportInventory() {
+  const rows = productsData.map((product) => {
+    const stock = Number(product.stock || 0);
+    const minRequired = 20;
+    const status = stock === 0 ? 'Out of Stock' : stock <= minRequired ? 'Low Stock' : 'In Stock';
+    return [
+      product.name,
+      capitalizeFirst(product.category || ""),
+      stock,
+      minRequired,
+      status,
+      Number(product.price || 0) * stock
+    ];
+  });
+
+  downloadCsv(
+    `ADE-Garage-Inventory-${new Date().toISOString().split('T')[0]}.csv`,
+    ['Product', 'Category', 'Current Stock', 'Min Required', 'Status', 'Inventory Value'],
+    rows
+  );
+  showToast("success", "Inventory exported successfully!");
 }
 
 function exportAnalytics() {
@@ -2018,7 +2241,7 @@ function getFilteredLiveOrders() {
       order.shipping_address,
       order.city,
       order.zip_code,
-      ...(order.items || []).flatMap((item) => [
+      ...(Array.isArray(order.items) ? order.items : []).flatMap((item) => [
         item.product_name,
         item.product_brand,
         item.product_category
@@ -2032,8 +2255,13 @@ function getFilteredLiveOrders() {
 /**
  * Load orders from database
  */
-async function loadOrders() {
+async function loadOrders(force = false) {
   try {
+    if (!force && realOrdersData.length > 0 && Date.now() - ordersLoadedAt < ADMIN_CACHE_TTL) {
+      displayOrdersInTable();
+      return;
+    }
+
     console.log('Loading orders from /api/orders...');
     const response = await fetch('/api/orders');
     const data = await response.json();
@@ -2042,6 +2270,7 @@ async function loadOrders() {
     
     if (data.success) {
       realOrdersData = data.orders;
+      ordersLoadedAt = Date.now();
       console.log('Orders data loaded:', realOrdersData);
       displayOrdersInTable();
     } else {
@@ -2101,8 +2330,9 @@ function displayOrdersInTable() {
       ordersGrid.innerHTML = filteredOrders.map(order => {
         const statusLabel = capitalizeFirst(order.status).toUpperCase();
         
-        const itemsToShow = order.items.slice(0, 3);
-        const hasMoreItems = order.items.length > 3;
+        const orderItems = Array.isArray(order.items) ? order.items : [];
+        const itemsToShow = orderItems.slice(0, 3);
+        const hasMoreItems = orderItems.length > 3;
         
         return `
           <div class="order-card" onclick="viewOrderDetails(${order.id})" style="cursor: pointer;">
@@ -2129,7 +2359,7 @@ function displayOrdersInTable() {
                   </div>
                 `;
               }).join('')}
-              ${hasMoreItems ? `<div style="text-align: center; color: #64748b; font-size: 12px; margin-top: 8px;">+${order.items.length - 3} more items</div>` : ''}
+              ${hasMoreItems ? `<div style="text-align: center; color: #64748b; font-size: 12px; margin-top: 8px;">+${orderItems.length - 3} more items</div>` : ''}
             </div>
             
             <div class="order-footer">
@@ -2201,7 +2431,8 @@ function viewOrderDetails(orderId) {
     : "To be scheduled";
 
   const detailProducts = document.getElementById("detailProducts");
-  detailProducts.innerHTML = order.items.map((item) => {
+  const orderItems = Array.isArray(order.items) ? order.items : [];
+  detailProducts.innerHTML = orderItems.map((item) => {
     const imageUrl = resolveProductImageUrl(item.product_image || "https://via.placeholder.com/80");
     return `
       <div class="detail-product-item">
@@ -2214,7 +2445,7 @@ function viewOrderDetails(orderId) {
         </div>
       </div>
     `;
-  }).join("");
+  }).join("") || '<div class="detail-product-item"><div class="detail-product-info"><div class="detail-product-name">No items found for this order</div></div></div>';
 
   document.getElementById("orderDetailModal").classList.add("active");
   closeOrderStatusModal();
@@ -2282,7 +2513,7 @@ async function submitOrderStatusUpdate(event) {
 
     if (data.success) {
       closeOrderStatusModal();
-      await loadOrders();
+      await loadOrders(true);
       await loadDashboardData();
       await loadDashboardStats();
       await loadNotifications();
@@ -2608,43 +2839,6 @@ function handleDashboardStatAction() {
 
 // Load orders when switching to orders section
 document.addEventListener('DOMContentLoaded', () => {
-  const ordersNav = document.querySelector('[data-section="orders"]');
-  if (ordersNav) {
-    ordersNav.addEventListener('click', () => {
-      loadOrders();
-    });
-  }
-  
-  // Load orders if on orders page
-  if (document.getElementById('ordersTableBody') || document.getElementById('ordersGrid')) {
-    loadOrders();
-  }
-  
-  // Load dashboard data when switching to dashboard
-  const dashboardNav = document.querySelector('[data-section="dashboard"]');
-  if (dashboardNav) {
-    dashboardNav.addEventListener('click', () => {
-      loadDashboardData();
-      loadDashboardStats();
-    });
-  }
-  
-  // Load dashboard data on page load if dashboard is active
-  if (document.getElementById('recentOrdersTable')) {
-    loadDashboardData();
-    loadDashboardStats();
-  }
-  
-  // Setup notification button
-  const notificationBtn = document.getElementById('notificationBtn');
-  if (notificationBtn) {
-    notificationBtn.addEventListener('click', toggleNotificationPanel);
-  }
-  
-  // Load notifications on page load
-  loadNotifications();
-  
-// Refresh notifications every 30 seconds
   setInterval(loadNotifications, 30000);
 });
 
