@@ -20,8 +20,11 @@ Route::get('/', function () {
 })->name('login');
 
 Route::post('/signup', [UserController::class, 'signup']);
+Route::post('/signup/verify', [UserController::class, 'verifySignupCode'])->name('signup.verify');
 Route::post('/login',  [UserController::class, 'login']);
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
+Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->whereIn('provider', ['google', 'facebook']);
+Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->whereIn('provider', ['google', 'facebook']);
 
 Route::get('/home_landing', function () {
     return view('home_landing');

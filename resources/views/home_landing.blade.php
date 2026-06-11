@@ -220,8 +220,8 @@
 
           <div class="micro">Or continue with</div>
           <div class="social-row" aria-hidden="false">
-            <div class="social" title="Continue with Apple"><i class="bi bi-apple" style="font-size:20px;"></i></div>
-            <div class="social" title="Continue with GCash"><i class="bi bi-wallet2" style="font-size:18px;"></i></div>
+            <a class="social" title="Continue with Google" href="/auth/google" aria-label="Continue with Google"><i class="bi bi-google" style="font-size:20px;"></i></a>
+            <a class="social" title="Continue with Facebook" href="/auth/facebook" aria-label="Continue with Facebook"><i class="bi bi-facebook" style="font-size:20px;"></i></a>
           </div>
 
           <div class="micro">Don't have an account? <a href="#" id="gotoSignUp">Sign Up</a></div>
@@ -267,12 +267,31 @@
   </form>
           <div class="micro">Or continue an account?</div>
           <div class="social-row">
-            <div class="social" title="Apple"><i class="bi bi-apple" style="font-size:20px;"></i></div>
-            <div class="social" title="GCash"><i class="bi bi-wallet2" style="font-size:18px;"></i></div>
+            <a class="social" title="Continue with Google" href="/auth/google" aria-label="Continue with Google"><i class="bi bi-google" style="font-size:20px;"></i></a>
+            <a class="social" title="Continue with Facebook" href="/auth/facebook" aria-label="Continue with Facebook"><i class="bi bi-facebook" style="font-size:20px;"></i></a>
           </div>
 
           <div class="micro">Already have an account? <a href="#" id="gotoLogin">Log In</a></div>
 
+        </section>
+
+        <section id="panel-verify" role="tabpanel" aria-labelledby="tab-signup" class="mb-panel" hidden>
+          <h2 class="auth-title">VERIFY EMAIL</h2>
+          <p class="auth-sub">Enter the verification code sent to your email.</p>
+
+          <form id="verifySignupForm" class="form-glass" autocomplete="one-time-code" action="/signup/verify" method="POST">
+            @csrf
+            <div class="mb-3">
+              <label class="form-label help-text">Email</label>
+              <input id="verifyEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required />
+            </div>
+            <div class="mb-3">
+              <label class="form-label help-text">Verification code</label>
+              <input id="verifyCode" name="code" type="text" class="form-control" placeholder="Enter code" inputmode="numeric" autocomplete="one-time-code" required />
+            </div>
+            <button id="verifySignupBtn" type="submit" class="btn-neon">VERIFY</button>
+            <div class="micro">Need a new code? <a href="#" id="restartSignup">Sign up again</a></div>
+          </form>
         </section>
 
 

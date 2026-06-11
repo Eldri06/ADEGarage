@@ -271,7 +271,7 @@
       
       grid.innerHTML = orders.map(order => {
         const firstItem = order.items[0];
-        const imageUrl = firstItem.product_image ? `/storage/${firstItem.product_image}` : 'https://via.placeholder.com/60';
+        const imageUrl = firstItem.product_image ? `/storage/${firstItem.product_image}` : '/images/products/placeholder.png';
         const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
         
         // Map status to tab names

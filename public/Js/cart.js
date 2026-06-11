@@ -208,7 +208,7 @@ window.updateCartDisplayFromDB = function updateCartDisplayFromDB() {
 
   // Render cart items
   cartItemsContainer.innerHTML = cartData.map(item => {
-    const imageUrl = item.product_image ? `/storage/${item.product_image}` : `https://via.placeholder.com/100/1a2332/1ee0ff?text=${item.product_name.substring(0, 2)}`;
+    const imageUrl = item.product_image ? `/storage/${item.product_image}` : '/images/products/placeholder.png';
     
     return `
       <div class="cart-item" data-item-id="${item.id}">

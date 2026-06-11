@@ -111,7 +111,7 @@
       </div>
       
       <div class="modal-left">
-        <img class="modal-product-image" id="modalProductImage" src="/placeholder.svg" alt="Product">
+        <img class="modal-product-image" id="modalProductImage" src="/images/products/placeholder.png" alt="Product">
         
         <div class="product-description">
           <h4>Product Description</h4>

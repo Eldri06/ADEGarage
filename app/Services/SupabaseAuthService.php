@@ -49,6 +49,15 @@ class SupabaseAuthService
         return $this->requestJson('GET', '/auth/v1/user', null, $accessToken);
     }
 
+    public function verifySignupOtp(string $email, string $token): array
+    {
+        return $this->requestJson('POST', '/auth/v1/verify', [
+            'email' => $email,
+            'token' => $token,
+            'type'  => 'signup',
+        ]);
+    }
+
     public function adminCreateUser(string $email, string $password, array $data = []): array
     {
         // Must use service role key for Admin API endpoints

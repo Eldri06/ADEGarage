@@ -9,7 +9,7 @@ const ordersData = [
   {
     id: "ADE-2025-001",
     customer: "Junaica",
-    products: [{ name: "Brake Pads Set", qty: 2, image: "https://via.placeholder.com/60/1a2332/1ee0ff?text=BP" }],
+    products: [{ name: "Brake Pads Set", qty: 2, image: "/images/products/placeholder.png" }],
     total: 2500,
     subtotal: 2400,
     shippingFee: 100,
@@ -23,7 +23,7 @@ const ordersData = [
   {
     id: "ADE-2025-002",
     customer: "Mels",
-    products: [{ name: "Engine Oil 5W-30", qty: 1, image: "https://via.placeholder.com/60/1a2332/1ee0ff?text=EO" }],
+    products: [{ name: "Engine Oil 5W-30", qty: 1, image: "/images/products/placeholder.png" }],
     total: 1200,
     subtotal: 1100,
     shippingFee: 100,
@@ -37,7 +37,7 @@ const ordersData = [
   {
     id: "ADE-2025-003",
     customer: "Chris Brown",
-    products: [{ name: "Air Filter", qty: 1, image: "https://via.placeholder.com/60/1a2332/1ee0ff?text=AF" }],
+    products: [{ name: "Air Filter", qty: 1, image: "/images/products/placeholder.png" }],
     total: 850,
     subtotal: 750,
     shippingFee: 100,
@@ -51,7 +51,7 @@ const ordersData = [
   {
     id: "ADE-2025-004",
     customer: "Rose",
-    products: [{ name: "Spark Plugs", qty: 4, image: "https://via.placeholder.com/60/1a2332/1ee0ff?text=SP" }],
+    products: [{ name: "Spark Plugs", qty: 4, image: "/images/products/placeholder.png" }],
     total: 1680,
     subtotal: 1580,
     shippingFee: 100,
@@ -65,7 +65,7 @@ const ordersData = [
   {
     id: "ADE-2025-005",
     customer: "Jennie",
-    products: [{ name: "Tire Set 195/65R15", qty: 4, image: "https://via.placeholder.com/60/1a2332/1ee0ff?text=TS" }],
+    products: [{ name: "Tire Set 195/65R15", qty: 4, image: "/images/products/placeholder.png" }],
     total: 12000,
     subtotal: 11900,
     shippingFee: 100,
@@ -129,6 +129,7 @@ let currentAdminSection = "dashboard";
 let dashboardSummaryData = {};
 let dashboardStatActionSection = "dashboard";
 const ADMIN_CACHE_TTL = 30000;
+const PRODUCT_PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
 let productsLoadedAt = 0;
 let ordersLoadedAt = 0;
 const analyticsCache = {
@@ -277,7 +278,7 @@ function resolveProductImageUrl(productOrPath) {
 
   const image = String(productOrPath || '');
   if (!image) {
-    return 'https://via.placeholder.com/60/1a2332/1ee0ff?text=NA';
+    return PRODUCT_PLACEHOLDER_IMAGE;
   }
 
   if (/^https?:\/\//i.test(image) || image.startsWith('/')) {
@@ -288,21 +289,7 @@ function resolveProductImageUrl(productOrPath) {
 }
 
 function buildCategoryFallbackImage(product) {
-  const cat = normalizeAdminValue(product?.category);
-  if (cat.includes('brake')) return '/images/products/category_brake.png';
-  if (cat.includes('wheel') || cat.includes('tire')) return '/images/products/category_wheel.png';
-  if (cat.includes('engine') || cat.includes('drive train')) return '/images/products/category_engine.png';
-  if (cat.includes('filter')) return '/images/products/category_filter.png';
-  if (cat.includes('lighting')) return '/images/products/category_lighting.png';
-  if (cat.includes('cowling') || cat.includes('panel') || cat.includes('fender')) return '/images/products/category_cowling.png';
-  if (cat.includes('electrical') || cat.includes('battery')) return '/images/products/category_electrical.png';
-  if (cat.includes('exhaust')) return '/images/products/category_exhaust.png';
-  if (cat.includes('suspension')) return '/images/products/category_suspension.png';
-  if (cat.includes('transmission')) return '/images/products/category_transmission.png';
-  if (cat.includes('clutch')) return '/images/products/category_clutch.png';
-
-  const initials = String(product?.name || 'NA').substring(0, 2).toUpperCase();
-  return `https://via.placeholder.com/50/1a2332/1ee0ff?text=${encodeURIComponent(initials)}`;
+  return PRODUCT_PLACEHOLDER_IMAGE;
 }
 
 function populateAdminProductFilters() {
@@ -2515,7 +2502,7 @@ function displayOrdersInTable() {
             
             <div class="order-products">
               ${itemsToShow.map(item => {
-        const imageUrl = resolveProductImageUrl(item.product_image || ('https://via.placeholder.com/60/1a2332/1ee0ff?text=' + item.product_name.substring(0, 2)));
+        const imageUrl = resolveProductImageUrl(item.product_image || PRODUCT_PLACEHOLDER_IMAGE);
                 return `
                   <div class="order-product-item">
                     <img src="${imageUrl}" alt="${item.product_name}" class="order-product-img">
@@ -2600,7 +2587,7 @@ function viewOrderDetails(orderId) {
   const detailProducts = document.getElementById("detailProducts");
   const orderItems = Array.isArray(order.items) ? order.items : [];
   detailProducts.innerHTML = orderItems.map((item) => {
-    const imageUrl = resolveProductImageUrl(item.product_image || "https://via.placeholder.com/80");
+    const imageUrl = resolveProductImageUrl(item.product_image || PRODUCT_PLACEHOLDER_IMAGE);
     return `
       <div class="detail-product-item">
         <img src="${imageUrl}" alt="${escapeAdminHtml(item.product_name)}" class="detail-product-img">

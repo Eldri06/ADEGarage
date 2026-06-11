@@ -93,7 +93,7 @@ function viewOrderDetails(orderId) {
   const modalContent = document.getElementById('orderDetailsContent');
 
   const itemsHTML = order.items.map(item => {
-    const imageUrl = item.product_image ? `/storage/${item.product_image}` : 'https://via.placeholder.com/80';
+    const imageUrl = item.product_image ? `/storage/${item.product_image}` : '/images/products/placeholder.png';
     return `
       <div class="order-item">
         <img src="${imageUrl}" alt="${item.product_name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">

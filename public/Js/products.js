@@ -1,4 +1,5 @@
 window.productsData = [];
+const PRODUCT_PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
 
 function normalizeValue(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -89,21 +90,7 @@ function getProductImageUrl(product) {
     return mappedImage;
   }
 
-  const category = normalizeValue(product.category);
-  if (category.includes('brake')) return '/images/products/category_brake.png';
-  if (category.includes('wheel') || category.includes('tire')) return '/images/products/category_wheel.png';
-  if (category.includes('engine') || category.includes('drive train')) return '/images/products/category_engine.png';
-  if (category.includes('filter')) return '/images/products/category_filter.png';
-  if (category.includes('lighting')) return '/images/products/category_lighting.png';
-  if (category.includes('cowling') || category.includes('panel') || category.includes('fender')) return '/images/products/category_cowling.png';
-  if (category.includes('electrical') || category.includes('battery')) return '/images/products/category_electrical.png';
-  if (category.includes('exhaust')) return '/images/products/category_exhaust.png';
-  if (category.includes('suspension')) return '/images/products/category_suspension.png';
-  if (category.includes('transmission')) return '/images/products/category_transmission.png';
-  if (category.includes('clutch')) return '/images/products/category_clutch.png';
-
-  const initials = String(product.name ?? 'PR').slice(0, 2).toUpperCase();
-  return `https://via.placeholder.com/600x400/1a2332/1ee0ff?text=${encodeURIComponent(initials)}`;
+  return PRODUCT_PLACEHOLDER_IMAGE;
 }
 
 function renderProductGrid(products) {

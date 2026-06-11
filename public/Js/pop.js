@@ -1,5 +1,6 @@
 (function () {
   const FOCUSABLE = 'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])';
+  const PRODUCT_PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
   let releaseFocusTrapHandler = null;
   let lastFocusedElement = null;
 
@@ -13,16 +14,20 @@
       tabSignup: document.getElementById('tab-signup'),
       panelLogin: document.getElementById('panel-login'),
       panelSignup: document.getElementById('panel-signup'),
+      panelVerify: document.getElementById('panel-verify'),
       panelForgot: document.getElementById('panel-forgot'),
       gotoSignUp: document.getElementById('gotoSignUp'),
       gotoLogin: document.getElementById('gotoLogin'),
+      restartSignup: document.getElementById('restartSignup'),
       openForgot: document.getElementById('openForgot'),
       backToLogin: document.getElementById('backToLogin'),
       authServerError: document.getElementById('authServerError'),
       loginForm: document.getElementById('loginForm'),
       signupForm: document.getElementById('signupForm'),
+      verifySignupForm: document.getElementById('verifySignupForm'),
       loginBtn: document.getElementById('loginBtn'),
       signupBtn: document.getElementById('signupBtn'),
+      verifySignupBtn: document.getElementById('verifySignupBtn'),
     };
   }
 
@@ -43,25 +48,26 @@
   }
 
   function activateTab(tabName = 'login') {
-    const { tabLogin, tabSignup, panelLogin, panelSignup, panelForgot } = getElements();
-    if (!tabLogin || !tabSignup || !panelLogin || !panelSignup || !panelForgot) {
+    const { tabLogin, tabSignup, panelLogin, panelSignup, panelVerify, panelForgot } = getElements();
+    if (!tabLogin || !tabSignup || !panelLogin || !panelSignup || !panelVerify || !panelForgot) {
       return;
     }
 
     const isSignup = tabName === 'signup';
+    const isVerify = tabName === 'verify';
     const isForgot = tabName === 'forgot';
 
-    tabLogin.setAttribute('aria-selected', String(!isSignup && !isForgot));
-    tabLogin.setAttribute('tabindex', !isSignup && !isForgot ? '0' : '-1');
-    tabSignup.setAttribute('aria-selected', String(isSignup));
-    tabSignup.setAttribute('tabindex', isSignup ? '0' : '-1');
+    tabLogin.setAttribute('aria-selected', String(!isSignup && !isVerify && !isForgot));
+    tabLogin.setAttribute('tabindex', !isSignup && !isVerify && !isForgot ? '0' : '-1');
+    tabSignup.setAttribute('aria-selected', String(isSignup || isVerify));
+    tabSignup.setAttribute('tabindex', isSignup || isVerify ? '0' : '-1');
 
-    [panelLogin, panelSignup, panelForgot].forEach((section) => {
+    [panelLogin, panelSignup, panelVerify, panelForgot].forEach((section) => {
       section.hidden = true;
       section.classList.remove('fade-in', 'shake');
     });
 
-    const activePanel = isForgot ? panelForgot : isSignup ? panelSignup : panelLogin;
+    const activePanel = isForgot ? panelForgot : isVerify ? panelVerify : isSignup ? panelSignup : panelLogin;
     activePanel.hidden = false;
     activePanel.classList.add('fade-in');
   }
@@ -229,6 +235,19 @@
         return;
       }
 
+      if (response.ok && payload.success && payload.needs_verification) {
+        const signupEmail = document.getElementById('suEmail')?.value || '';
+        const verifyEmail = document.getElementById('verifyEmail');
+        if (verifyEmail) {
+          verifyEmail.value = signupEmail;
+        }
+
+        setAuthError(payload.message || 'We sent a verification code to your email.');
+        activateTab('verify');
+        document.getElementById('verifyCode')?.focus();
+        return;
+      }
+
       setAuthError(extractErrorMessage(payload));
       activateTab(tabName);
     } catch (error) {
@@ -273,23 +292,8 @@
             : `/storage/${product.image}`;
         }
 
-        if (!imageUrl && product.category) {
-          const category = product.category.toLowerCase();
-          if (category.includes('brake')) imageUrl = '/images/products/category_brake.png';
-          else if (category.includes('wheel') || category.includes('tire')) imageUrl = '/images/products/category_wheel.png';
-          else if (category.includes('engine') || category.includes('drive train')) imageUrl = '/images/products/category_engine.png';
-          else if (category.includes('filter')) imageUrl = '/images/products/category_filter.png';
-          else if (category.includes('lighting')) imageUrl = '/images/products/category_lighting.png';
-          else if (category.includes('cowling') || category.includes('panel') || category.includes('fender')) imageUrl = '/images/products/category_cowling.png';
-          else if (category.includes('electrical') || category.includes('battery')) imageUrl = '/images/products/category_electrical.png';
-          else if (category.includes('exhaust')) imageUrl = '/images/products/category_exhaust.png';
-          else if (category.includes('suspension')) imageUrl = '/images/products/category_suspension.png';
-          else if (category.includes('transmission')) imageUrl = '/images/products/category_transmission.png';
-          else if (category.includes('clutch')) imageUrl = '/images/products/category_clutch.png';
-        }
-
         if (!imageUrl) {
-          imageUrl = `https://via.placeholder.com/600x400/0d1117/1ee0ff?text=${encodeURIComponent(product.name.substring(0, 2).toUpperCase())}`;
+          imageUrl = PRODUCT_PLACEHOLDER_IMAGE;
         }
 
         return `
@@ -321,12 +325,15 @@
       tabSignup,
       gotoSignUp,
       gotoLogin,
+      restartSignup,
       openForgot,
       backToLogin,
       loginForm,
       signupForm,
+      verifySignupForm,
       loginBtn,
       signupBtn,
+      verifySignupBtn,
     } = getElements();
 
     initializeTimelineAnimation();
@@ -369,6 +376,11 @@
       event.preventDefault();
       activateTab('login');
     });
+    restartSignup?.addEventListener('click', (event) => {
+      event.preventDefault();
+      setAuthError('');
+      activateTab('signup');
+    });
     openForgot?.addEventListener('click', (event) => {
       event.preventDefault();
       activateTab('forgot');
@@ -386,6 +398,11 @@
     signupForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       await submitAuthForm(signupForm, signupBtn, 'signup', 'CREATING ACCOUNT...');
+    });
+
+    verifySignupForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAuthForm(verifySignupForm, verifySignupBtn, 'verify', 'VERIFYING...');
     });
 
     if (backdrop?.dataset.openOnError === 'true') {

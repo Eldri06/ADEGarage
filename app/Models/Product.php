@@ -9,6 +9,8 @@ class Product extends Model
 {
     use HasFactory;
 
+    public const PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
+
     protected $appends = [
         'image_url',
     ];
@@ -66,10 +68,7 @@ class Product extends Model
             return $mappedImage;
         }
 
-        return static::buildCategoryFallbackImage(
-            (string) ($product['category'] ?? ''),
-            (string) ($product['name'] ?? 'NA')
-        );
+        return static::PLACEHOLDER_IMAGE;
     }
 
     private static function mapCatalogImage(array $product): ?string
@@ -103,55 +102,7 @@ class Product extends Model
 
     private static function buildCategoryFallbackImage(string $category, string $name): string
     {
-        $category = static::normalizeImageValue($category);
-
-        if (str_contains($category, 'brake')) {
-            return '/images/products/category_brake.png';
-        }
-
-        if (str_contains($category, 'wheel') || str_contains($category, 'tire')) {
-            return '/images/products/category_wheel.png';
-        }
-
-        if (str_contains($category, 'engine') || str_contains($category, 'drive train')) {
-            return '/images/products/category_engine.png';
-        }
-
-        if (str_contains($category, 'filter')) {
-            return '/images/products/category_filter.png';
-        }
-
-        if (str_contains($category, 'lighting')) {
-            return '/images/products/category_lighting.png';
-        }
-
-        if (str_contains($category, 'cowling') || str_contains($category, 'panel') || str_contains($category, 'fender')) {
-            return '/images/products/category_cowling.png';
-        }
-
-        if (str_contains($category, 'electrical') || str_contains($category, 'battery')) {
-            return '/images/products/category_electrical.png';
-        }
-
-        if (str_contains($category, 'exhaust')) {
-            return '/images/products/category_exhaust.png';
-        }
-
-        if (str_contains($category, 'suspension')) {
-            return '/images/products/category_suspension.png';
-        }
-
-        if (str_contains($category, 'transmission')) {
-            return '/images/products/category_transmission.png';
-        }
-
-        if (str_contains($category, 'clutch')) {
-            return '/images/products/category_clutch.png';
-        }
-
-        $initials = strtoupper(substr(trim($name) ?: 'NA', 0, 2));
-
-        return 'https://via.placeholder.com/600x400/1a2332/1ee0ff?text=' . rawurlencode($initials);
+        return static::PLACEHOLDER_IMAGE;
     }
 
     private static function normalizeImageValue(mixed $value): string
