@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\File;
 
 class SupabaseAuthService
 {
@@ -100,11 +101,41 @@ class SupabaseAuthService
     }
 
     /**
-     * Get the public URL for a filename in the product-images bucket.
+     * Upload a file to Supabase Storage in a specific bucket.
      */
-    public function getPublicUrl(string $filename): string
+    public function uploadFile(string $bucket, string $filePath, string $filename): string
     {
-        return $this->url . '/storage/v1/object/public/product-images/' . $filename;
+        $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
+        $mimeType = File::mimeType($filePath);
+
+        $response = Http::withoutVerifying()
+            ->withHeaders([
+                'apikey'        => $this->serviceRoleKey,
+                'Authorization' => 'Bearer ' . $this->serviceRoleKey,
+                'Content-Type'  => $mimeType,
+            ])
+            ->withBody(file_get_contents($filePath), $mimeType)
+            ->put($endpoint);
+
+        if ($response->failed()) {
+            $payload = $response->json();
+            $message = is_array($payload)
+                ? (string) ($payload['message'] ?? $payload['error'] ?? 'Upload failed')
+                : 'Upload failed';
+            throw new \RuntimeException("Supabase Storage upload to bucket '$bucket' failed: " . $message);
+        }
+
+        return $this->getPublicUrlFromBucket($bucket, $filename);
+    }
+
+    private function getPublicUrlFromBucket(string $bucket, string $filename): string
+    {
+        return $this->url . '/storage/v1/object/public/' . $bucket . '/' . $filename;
+    }
+
+    private function getPublicUrl(string $filename): string
+    {
+        return $this->getPublicUrlFromBucket('product-images', $filename);
     }
 
     // -------------------------------------------------------------------------

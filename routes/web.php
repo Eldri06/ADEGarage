@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SalesAnalyticsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -74,4 +75,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::put('/api/orders/{id}/status',   [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
 
     Route::get('/api/admin/users',          [AdminController::class, 'index'])->name('admin.users');
+    Route::get('/api/admin/analytics',      [SalesAnalyticsController::class, 'summary'])->name('admin.analytics');
+    Route::get('/api/admin/sales-history',  [SalesAnalyticsController::class, 'index'])->name('admin.sales-history');
 });
