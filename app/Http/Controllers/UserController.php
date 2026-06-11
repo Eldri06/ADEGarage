@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\SupabaseAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
@@ -70,6 +71,25 @@ class UserController extends Controller
         ]);
 
         try {
+            $existingUser = User::where('email', $request->email)->first();
+            if ($existingUser && Hash::check($request->password, $existingUser->password)) {
+                $request->session()->regenerate();
+                Auth::login($existingUser);
+
+                $redirectRoute = $existingUser->is_admin
+                    ? route('admin')
+                    : route('customer_home');
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'redirect' => $redirectRoute,
+                    ]);
+                }
+
+                return redirect()->to($redirectRoute);
+            }
+
             // 1. Authenticate with Supabase
             $session = $supabase->signInWithPassword($request->email, $request->password);
 

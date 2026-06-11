@@ -1,5 +1,6 @@
 // Cart functionality
 let cartData = [];
+let cartLoadPromise = null;
 
 // Load cart on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,37 +11,42 @@ document.addEventListener('DOMContentLoaded', () => {
  * Load cart items from server
  */
 window.loadCart = async function loadCart() {
-  try {
-    console.log('Loading cart from /api/cart...');
-    const response = await fetch('/api/cart');
-    const data = await response.json();
-    
-    console.log('Cart API response:', data);
-    
-    if (data.success) {
-      cartData = data.cart_items;
-      console.log('Cart data set to:', cartData);
-      console.log('Cart count:', data.count);
-      updateCartCount(data.count);
-      updateCartDisplayFromDB();
-    } else {
-      console.error('Cart API returned success: false');
-    }
-  } catch (error) {
-    console.error('Error loading cart:', error);
+  if (cartLoadPromise) {
+    return cartLoadPromise;
   }
+
+  cartLoadPromise = (async () => {
+    try {
+      const response = await fetch('/api/cart');
+      const data = await response.json();
+
+      if (data.success) {
+        cartData = data.cart_items;
+        updateCartCount(data.count);
+        updateCartDisplayFromDB();
+        return data;
+      } else {
+        console.error('Cart API returned success: false');
+      }
+    } catch (error) {
+      console.error('Error loading cart:', error);
+    } finally {
+      cartLoadPromise = null;
+    }
+  })();
+
+  return cartLoadPromise;
 }
 
 /**
  * Add product to cart
  */
-window.addToCart = async function addToCart(productId, quantity = 1) {
+window.addToCart = async function addToCart(productId, quantity = 1, options = {}) {
+  const { reload = true, silent = false } = options;
+
   try {
-    console.log('Adding to cart:', { productId, quantity });
-    
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    console.log('CSRF Token:', csrfToken ? 'Found' : 'Missing');
-    
+
     const response = await fetch('/api/cart', {
       method: 'POST',
       headers: {
@@ -53,20 +59,30 @@ window.addToCart = async function addToCart(productId, quantity = 1) {
       })
     });
 
-    console.log('Response status:', response.status);
     const data = await response.json();
-    console.log('Response data:', data);
 
     if (response.ok && data.success) {
-      showToast('success', data.message || 'Product added to cart!');
-      await loadCart(); // Reload cart and update display
+      if (!silent) {
+        showCartToast('success', data.message || 'Product added to cart!');
+      }
+
+      if (reload) {
+        await loadCart();
+      } else {
+        const currentCount = Number(document.getElementById('cartCount')?.textContent || 0);
+        updateCartCount(currentCount + quantity);
+      }
+
+      return data;
     } else {
-      showToast('error', data.message || 'Failed to add to cart');
+      showCartToast('error', data.message || 'Failed to add to cart');
       console.error('Cart error:', data);
+      return data;
     }
   } catch (error) {
     console.error('Error adding to cart:', error);
-    showToast('error', 'An error occurred: ' + error.message);
+    showCartToast('error', 'An error occurred: ' + error.message);
+    return { success: false, message: error.message };
   }
 }
 
@@ -87,13 +103,13 @@ window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
     const data = await response.json();
 
     if (data.success) {
-      await loadCart(); // Reload cart
+      await loadCart();
     } else {
-      showToast('error', data.message || 'Failed to update cart');
+      showCartToast('error', data.message || 'Failed to update cart');
     }
   } catch (error) {
     console.error('Error updating cart:', error);
-    showToast('error', 'An error occurred while updating cart');
+    showCartToast('error', 'An error occurred while updating cart');
   }
 }
 
@@ -113,14 +129,14 @@ window.removeFromCart = async function removeFromCart(cartItemId) {
     const data = await response.json();
 
     if (data.success) {
-      showToast('success', 'Item removed from cart');
-      await loadCart(); // Reload cart
+      showCartToast('success', 'Item removed from cart');
+      await loadCart();
     } else {
-      showToast('error', data.message || 'Failed to remove item');
+      showCartToast('error', data.message || 'Failed to remove item');
     }
   } catch (error) {
     console.error('Error removing from cart:', error);
-    showToast('error', 'An error occurred while removing item');
+    showCartToast('error', 'An error occurred while removing item');
   }
 }
 
@@ -144,14 +160,14 @@ window.clearCart = async function clearCart() {
     const data = await response.json();
 
     if (data.success) {
-      showToast('success', 'Cart cleared');
-      await loadCart(); // Reload cart
+      showCartToast('success', 'Cart cleared');
+      await loadCart();
     } else {
-      showToast('error', data.message || 'Failed to clear cart');
+      showCartToast('error', data.message || 'Failed to clear cart');
     }
   } catch (error) {
     console.error('Error clearing cart:', error);
-    showToast('error', 'An error occurred while clearing cart');
+    showCartToast('error', 'An error occurred while clearing cart');
   }
 }
 
@@ -170,22 +186,16 @@ window.updateCartCount = function updateCartCount(count) {
  * Update cart display from database
  */
 window.updateCartDisplayFromDB = function updateCartDisplayFromDB() {
-  console.log('Updating cart display from DB. Cart data:', cartData);
-  
   const cartItemsContainer = document.getElementById('cartItems');
   const cartTotalElement = document.getElementById('cartTotal');
   const subtotalElement = document.getElementById('subtotal');
   const orderTotalElement = document.getElementById('orderTotal');
 
-  console.log('Cart container found:', !!cartItemsContainer);
-
   if (!cartItemsContainer) {
-    console.warn('Cart items container not found! Will retry when container is available.');
     return;
   }
 
   if (!cartData || cartData.length === 0) {
-    console.log('Cart is empty, showing empty message');
     cartItemsContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;"><p>Your cart is empty</p></div>';
     if (cartTotalElement) cartTotalElement.textContent = '₱0';
     if (subtotalElement) subtotalElement.textContent = '₱0';
@@ -193,8 +203,6 @@ window.updateCartDisplayFromDB = function updateCartDisplayFromDB() {
     return;
   }
 
-  console.log('Rendering', cartData.length, 'cart items');
-  
   // Calculate total
   const total = cartData.reduce((sum, item) => sum + item.subtotal, 0);
 
@@ -259,10 +267,14 @@ function capitalizeFirst(str) {
 /**
  * Show toast notification (if not already defined)
  */
-function showToast(type, message) {
+function showCartToast(type, message) {
   // Check if showToast is already defined globally
   if (typeof window.showToast === 'function') {
-    window.showToast(type, message);
+    if (window.showToast.length >= 2) {
+      window.showToast(type, message);
+    } else {
+      window.showToast(message);
+    }
     return;
   }
 

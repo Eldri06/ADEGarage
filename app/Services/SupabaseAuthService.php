@@ -188,6 +188,8 @@ class SupabaseAuthService
         }
 
         $request = Http::withoutVerifying() // Safe for local dev; remove on production if desired
+            ->timeout(8)
+            ->connectTimeout(3)
             ->withHeaders([
                 'apikey'        => $this->anonKey,
                 'Authorization' => 'Bearer ' . ($bearer ?: $this->anonKey),

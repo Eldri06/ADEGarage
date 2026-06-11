@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\SalesHistory;
 use App\Models\Product;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -13,6 +15,33 @@ use Illuminate\Support\Facades\Artisan;
 
 class SalesAnalyticsController extends Controller
 {
+    private function monthName(int $month): string
+    {
+        return Carbon::create(null, $month, 1)->format('F');
+    }
+
+    private function liveOrderItems()
+    {
+        return OrderItem::query()
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereNotIn('orders.status', ['cancelled'])
+            ->select([
+                'order_items.product_name as product',
+                'order_items.product_brand as brand',
+                'order_items.product_category as part_type',
+                'order_items.quantity',
+                'order_items.price',
+                'order_items.subtotal',
+                'orders.created_at',
+            ])
+            ->get();
+    }
+
+    private function estimatedProfit(float $revenue): float
+    {
+        return round($revenue * 0.30, 2);
+    }
+
     /**
      * Return all sales history records.
      */
@@ -58,7 +87,17 @@ class SalesAnalyticsController extends Controller
                 $query->whereNull('is_admin')->orWhere('is_admin', false);
             })->count(),
             'total_products' => Product::count(),
-            'sales_by_month' => SalesHistory::select(
+            'sales_by_month' => $this->combinedMonthlyRevenue(),
+        ];
+
+        return response()->json($summary);
+    }
+
+    private function combinedMonthlyRevenue()
+    {
+        $monthly = collect();
+
+        SalesHistory::select(
                     'month_name',
                     'month',
                     DB::raw('SUM(price * quantity) as revenue'),
@@ -67,10 +106,37 @@ class SalesAnalyticsController extends Controller
                 )
                 ->groupBy('month_name', 'month')
                 ->orderBy('month')
-                ->get(),
-        ];
+                ->get()
+                ->each(function ($row) use (&$monthly) {
+                    $key = (int) $row->month;
+                    $monthly[$key] = [
+                        'month_name' => $row->month_name ?: $this->monthName($key),
+                        'month' => $key,
+                        'revenue' => (float) $row->revenue,
+                        'profit' => (float) $row->profit,
+                        'units' => (int) $row->units,
+                    ];
+                });
 
-        return response()->json($summary);
+        $this->liveOrderItems()
+            ->groupBy(fn ($item) => Carbon::parse($item->created_at)->month)
+            ->each(function ($items, $month) use (&$monthly) {
+                $revenue = (float) $items->sum('subtotal');
+                $existing = $monthly[(int) $month] ?? [
+                    'month_name' => $this->monthName((int) $month),
+                    'month' => (int) $month,
+                    'revenue' => 0,
+                    'profit' => 0,
+                    'units' => 0,
+                ];
+
+                $existing['revenue'] += $revenue;
+                $existing['profit'] += $this->estimatedProfit($revenue);
+                $existing['units'] += (int) $items->sum('quantity');
+                $monthly[(int) $month] = $existing;
+            });
+
+        return $monthly->sortKeys()->values();
     }
 
     /**
@@ -80,30 +146,60 @@ class SalesAnalyticsController extends Controller
     {
         $month = $request->query('month'); // optional filter
 
-        $query = SalesHistory::select(
-                'month_name',
-                'month',
-                'product',
-                'brand',
-                'part_type',
-                DB::raw('SUM(quantity) as total_quantity'),
-                DB::raw('SUM(price * quantity) as total_revenue'),
-                DB::raw('SUM(profit) as total_profit')
-            )
-            ->groupBy('month_name', 'month', 'product', 'brand', 'part_type');
+        $rows = collect();
 
-        if ($month) {
-            $query->where('month', (int) $month);
-        }
+        SalesHistory::query()
+            ->when($month, fn ($query) => $query->where('month', (int) $month))
+            ->get()
+            ->each(function ($item) use ($rows) {
+                $rows->push([
+                    'month_name' => $item->month_name ?: $this->monthName((int) $item->month),
+                    'month' => (int) $item->month,
+                    'product' => $item->product,
+                    'brand' => $item->brand,
+                    'part_type' => $item->part_type,
+                    'quantity' => (int) $item->quantity,
+                    'revenue' => (float) $item->price * (int) $item->quantity,
+                    'profit' => (float) $item->profit,
+                ]);
+            });
 
-        $results = $query->orderBy('month')
-            ->orderByDesc('total_quantity')
-            ->get();
+        $this->liveOrderItems()
+            ->filter(fn ($item) => !$month || Carbon::parse($item->created_at)->month === (int) $month)
+            ->each(function ($item) use ($rows) {
+                $createdAt = Carbon::parse($item->created_at);
+                $revenue = (float) $item->subtotal;
+                $rows->push([
+                    'month_name' => $createdAt->format('F'),
+                    'month' => $createdAt->month,
+                    'product' => $item->product,
+                    'brand' => $item->brand,
+                    'part_type' => $item->part_type,
+                    'quantity' => (int) $item->quantity,
+                    'revenue' => $revenue,
+                    'profit' => $this->estimatedProfit($revenue),
+                ]);
+            });
 
-        // Group by month and take top 5 per month
-        $grouped = $results->groupBy('month_name')->map(function ($items) {
-            return $items->take(5)->values();
-        });
+        $grouped = $rows
+            ->groupBy(fn ($row) => $row['month'] . '|' . $row['month_name'] . '|' . $row['product'] . '|' . $row['brand'] . '|' . $row['part_type'])
+            ->map(function ($items) {
+                $first = $items->first();
+                return [
+                    'month_name' => $first['month_name'],
+                    'month' => $first['month'],
+                    'product' => $first['product'],
+                    'brand' => $first['brand'],
+                    'part_type' => $first['part_type'],
+                    'total_quantity' => $items->sum('quantity'),
+                    'total_revenue' => round($items->sum('revenue'), 2),
+                    'total_profit' => round($items->sum('profit'), 2),
+                ];
+            })
+            ->sortBy('month')
+            ->sortByDesc('total_quantity')
+            ->groupBy('month_name')
+            ->map(fn ($items) => $items->take(5)->values());
 
         return response()->json($grouped);
     }
@@ -113,7 +209,7 @@ class SalesAnalyticsController extends Controller
      */
     public function brandMargins()
     {
-        $brands = SalesHistory::select(
+        $historical = SalesHistory::select(
                 'brand',
                 DB::raw('SUM(price * quantity) as total_revenue'),
                 DB::raw('SUM(profit) as total_profit'),
@@ -124,21 +220,49 @@ class SalesAnalyticsController extends Controller
             ->where('brand', '!=', '')
             ->groupBy('brand')
             ->orderByDesc('total_revenue')
-            ->get()
+            ->get();
+
+        $live = $this->liveOrderItems()
+            ->filter(fn ($item) => trim((string) $item->brand) !== '')
+            ->groupBy('brand')
             ->map(function ($brand) {
-                $margin = $brand->total_revenue > 0
-                    ? round(($brand->total_profit / $brand->total_revenue) * 100, 1)
+                $revenue = (float) $brand->sum('subtotal');
+                return [
+                    'brand' => $brand->first()->brand,
+                    'total_revenue' => $revenue,
+                    'total_profit' => $this->estimatedProfit($revenue),
+                    'total_units' => (int) $brand->sum('quantity'),
+                    'transaction_count' => $brand->count(),
+                ];
+            });
+
+        $brands = $historical->map(fn ($brand) => [
+                'brand' => $brand->brand,
+                'total_revenue' => (float) $brand->total_revenue,
+                'total_profit' => (float) $brand->total_profit,
+                'total_units' => (int) $brand->total_units,
+                'transaction_count' => (int) $brand->transaction_count,
+            ])
+            ->concat($live)
+            ->groupBy('brand')
+            ->map(function ($items, $brand) {
+                $revenue = (float) $items->sum('total_revenue');
+                $profit = (float) $items->sum('total_profit');
+                $margin = $revenue > 0
+                    ? round(($profit / $revenue) * 100, 1)
                     : 0;
 
                 return [
-                    'brand'             => $brand->brand,
-                    'total_revenue'     => round($brand->total_revenue, 2),
-                    'total_profit'      => round($brand->total_profit, 2),
-                    'total_units'       => $brand->total_units,
-                    'transaction_count' => $brand->transaction_count,
+                    'brand'             => $brand,
+                    'total_revenue'     => round($revenue, 2),
+                    'total_profit'      => round($profit, 2),
+                    'total_units'       => (int) $items->sum('total_units'),
+                    'transaction_count' => (int) $items->sum('transaction_count'),
                     'profit_margin'     => $margin,
                 ];
-            });
+            })
+            ->sortByDesc('total_revenue')
+            ->values();
 
         return response()->json($brands);
     }
@@ -171,18 +295,7 @@ class SalesAnalyticsController extends Controller
      */
     public function revenueTrend()
     {
-        $trend = SalesHistory::select(
-                'month_name',
-                'month',
-                DB::raw('SUM(price * quantity) as revenue'),
-                DB::raw('SUM(profit) as profit'),
-                DB::raw('SUM(quantity) as units')
-            )
-            ->groupBy('month_name', 'month')
-            ->orderBy('month')
-            ->get();
-
-        return response()->json($trend);
+        return response()->json($this->combinedMonthlyRevenue());
     }
 
     /**
@@ -206,7 +319,7 @@ class SalesAnalyticsController extends Controller
      */
     public function partTypeBreakdown()
     {
-        $breakdown = SalesHistory::select(
+        $historical = SalesHistory::select(
                 'part_type',
                 DB::raw('SUM(quantity) as total_quantity'),
                 DB::raw('SUM(price * quantity) as total_revenue'),
@@ -215,8 +328,37 @@ class SalesAnalyticsController extends Controller
             ->whereNotNull('part_type')
             ->where('part_type', '!=', '')
             ->groupBy('part_type')
-            ->orderByDesc('total_revenue')
             ->get();
+
+        $live = $this->liveOrderItems()
+            ->filter(fn ($item) => trim((string) $item->part_type) !== '')
+            ->groupBy('part_type')
+            ->map(function ($items, $partType) {
+                $revenue = (float) $items->sum('subtotal');
+                return [
+                    'part_type' => $partType,
+                    'total_quantity' => (int) $items->sum('quantity'),
+                    'total_revenue' => $revenue,
+                    'total_profit' => $this->estimatedProfit($revenue),
+                ];
+            });
+
+        $breakdown = $historical->map(fn ($item) => [
+                'part_type' => $item->part_type,
+                'total_quantity' => (int) $item->total_quantity,
+                'total_revenue' => (float) $item->total_revenue,
+                'total_profit' => (float) $item->total_profit,
+            ])
+            ->concat($live)
+            ->groupBy('part_type')
+            ->map(fn ($items, $partType) => [
+                'part_type' => $partType,
+                'total_quantity' => (int) $items->sum('total_quantity'),
+                'total_revenue' => round($items->sum('total_revenue'), 2),
+                'total_profit' => round($items->sum('total_profit'), 2),
+            ])
+            ->sortByDesc('total_revenue')
+            ->values();
 
         return response()->json($breakdown);
     }

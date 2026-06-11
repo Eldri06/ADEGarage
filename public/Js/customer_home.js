@@ -11,6 +11,7 @@ let currentQuantity = 1;
     let currentStep = 2;
     const shippingCost = 150;
     let isEditMode = false;
+    let isCartActionPending = false;
 
     function normalizeFilterValue(value) {
       return String(value || '').trim().toLowerCase();
@@ -78,7 +79,6 @@ let currentQuantity = 1;
         noProductsMessage.style.display = visibleCount === 0 ? 'block' : 'none';
       }
 
-      console.log(`Filtering: ${visibleCount} products visible`);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -159,8 +159,6 @@ let currentQuantity = 1;
       loadSavedShippingInfo();
 
       // Initial filter to show all products
-      console.log('Initializing filters...');
-      console.log('Total products found:', document.querySelectorAll('.product-item').length);
       filterProducts();
     });
 
@@ -196,13 +194,6 @@ let currentQuantity = 1;
         ? window.productsData[productIndex]
         : null;
       
-      console.log('openProductModal - Product data:', {
-        productId: productId,
-        title: title,
-        hasProductId: !!productId,
-        datasetProductId: productItem.dataset.productId
-      });
-      
       currentProductData = {
         id: productId,
         title: title,
@@ -215,8 +206,6 @@ let currentQuantity = 1;
         variations: selectedProduct?.variations || null,
         specifications: selectedProduct?.specifications || null
       };
-      
-      console.log('currentProductData set to:', currentProductData);
       
       setupModal();
     }
@@ -352,59 +341,63 @@ let currentQuantity = 1;
     }
 
     window.handleBuyNow = async function handleBuyNow() {
+      if (isCartActionPending) return;
+      isCartActionPending = true;
+
       const totalPricePerItem = currentProductData.price; 
       const totalCost = totalPricePerItem * currentQuantity;
       
-      // Add to database cart if product ID exists
-      if (currentProductData.id && typeof addToCart === 'function') {
-        await addToCart(currentProductData.id, currentQuantity);
-        closeModal();
-        await showCheckoutPage();
-        showToast(`Proceeding to checkout with ${currentQuantity}x ${currentProductData.title}`);
-      } else {
-        // Fallback to local cart if no product ID
-        const cartItem = {
-          id: Date.now(),
-          name: currentProductData.title,
-          price: totalPricePerItem,
-          quantity: currentQuantity,
-          image: document.getElementById('modalProductImage').src,
-          variations: {
-            size: selectedVariations.size.value,
-            material: selectedVariations.material.value,
-            color: selectedVariations.color.value
-          }
-        };
+      try {
+        // Add to database cart if product ID exists
+        if (currentProductData.id && typeof addToCart === 'function') {
+          const result = await addToCart(currentProductData.id, currentQuantity, { reload: false, silent: true });
+          if (!result?.success) return;
+          closeModal();
+          await showCheckoutPage();
+          showToast(`Proceeding to checkout with ${currentQuantity}x ${currentProductData.title}`);
+        } else {
+          // Fallback to local cart if no product ID
+          const cartItem = {
+            id: Date.now(),
+            name: currentProductData.title,
+            price: totalPricePerItem,
+            quantity: currentQuantity,
+            image: document.getElementById('modalProductImage').src,
+            variations: {
+              size: selectedVariations.size.value,
+              material: selectedVariations.material.value,
+              color: selectedVariations.color.value
+            }
+          };
 
-        cartItems = [cartItem];
+          cartItems = [cartItem];
 
-        closeModal();
-        await showCheckoutPage();
-        updateCartDisplay();
-        
-        showToast(`Proceeding to checkout with ${currentQuantity}x ${currentProductData.title}`);
+          closeModal();
+          await showCheckoutPage();
+          updateCartDisplay();
+          
+          showToast(`Proceeding to checkout with ${currentQuantity}x ${currentProductData.title}`);
+        }
+      } finally {
+        isCartActionPending = false;
       }
     }
 
     window.handleAddToCart = async function handleAddToCart() {
+      if (isCartActionPending) return;
+      isCartActionPending = true;
+
       const totalPricePerItem = currentProductData.price; 
       const totalCost = totalPricePerItem * currentQuantity;
       
-      console.log('handleAddToCart called with:', {
-        productId: currentProductData.id,
-        quantity: currentQuantity,
-        addToCartExists: typeof addToCart === 'function'
-      });
-      
       // Add to database cart if product ID exists
       if (currentProductData.id && typeof addToCart === 'function') {
-        console.log('Adding to database cart...');
-        await addToCart(currentProductData.id, currentQuantity);
+        const result = await addToCart(currentProductData.id, currentQuantity, { reload: false });
+        if (!result?.success) {
+          isCartActionPending = false;
+          return;
+        }
       } else {
-        console.warn('Product ID missing or addToCart not available:', {
-          productId: currentProductData.id,
-          addToCartType: typeof addToCart
-        });
         // Fallback to local cart if no product ID
         const cartItem = {
           id: Date.now(),
@@ -430,6 +423,7 @@ let currentQuantity = 1;
       }
       
       closeModal();
+      isCartActionPending = false;
     }
 
     function showToast(message){
@@ -478,7 +472,6 @@ let currentQuantity = 1;
       
       // Load cart from database and display it
       if (typeof loadCart === 'function') {
-        console.log('Calling loadCart from showCheckoutPage');
         await loadCart();
       } else {
         console.error('loadCart function not found!');
@@ -509,7 +502,6 @@ let currentQuantity = 1;
 
       // Load cart when navigating to cart page (step 2)
       if (stepNum === 2 && typeof loadCart === 'function') {
-        console.log('Loading cart for step 2');
         await loadCart();
       }
 
@@ -759,8 +751,6 @@ let currentQuantity = 1;
           payment_method: form.paymentMethod.value
         };
 
-        console.log('Placing order with data:', orderData);
-
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         const response = await fetch('/api/orders', {
           method: 'POST',
@@ -772,8 +762,6 @@ let currentQuantity = 1;
         });
 
         const data = await response.json();
-        console.log('Order response:', data);
-
         if (response.ok && data.success) {
           // Display order number
           document.getElementById('orderNumber').textContent = data.order.order_number;
@@ -895,8 +883,6 @@ let currentQuantity = 1;
     }
 
     window.clearAllFilters = function clearAllFilters() {
-      console.log('Clearing all filters...');
-      
       // Clear all checkboxes
       document.querySelectorAll('input[type="checkbox"][data-filter-type]').forEach(cb => {
         cb.checked = false;

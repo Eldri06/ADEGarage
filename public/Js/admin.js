@@ -131,6 +131,14 @@ let dashboardStatActionSection = "dashboard";
 const ADMIN_CACHE_TTL = 30000;
 let productsLoadedAt = 0;
 let ordersLoadedAt = 0;
+const analyticsCache = {
+  revenueTrend: [],
+  partTypeBreakdown: [],
+  brandMargins: [],
+  tierDistribution: [],
+  topProducts: [],
+  deadStock: []
+};
 
 function getActiveAdminSection() {
   const activeSection = document.querySelector(".admin-section.active");
@@ -176,8 +184,7 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
 
   if (sectionName === "dashboard") {
     await loadOrders();
-    await loadDashboardData();
-    await Promise.all([loadDashboardStats(), loadNotifications()]);
+    await Promise.all([loadDashboardData(), loadDashboardStats(), loadNotifications()]);
     return;
   }
 
@@ -198,8 +205,7 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
   }
 
   if (sectionName === "analytics") {
-    await loadProductsData();
-    await loadAnalyticsData();
+    await Promise.all([loadProductsData(), loadAnalyticsData()]);
     destroyAnalyticsCharts();
     await initializeCharts();
   }
@@ -1135,10 +1141,11 @@ async function initializeRevenueChart() {
   try {
     const res = await fetch('/api/admin/analytics/revenue-trend');
     const data = await res.json();
+    analyticsCache.revenueTrend = Array.isArray(data) ? data : [];
 
-    const labels = data.map(d => d.month_name);
-    const revenue = data.map(d => parseFloat(d.revenue));
-    const profit = data.map(d => parseFloat(d.profit));
+    const labels = analyticsCache.revenueTrend.map(d => d.month_name);
+    const revenue = analyticsCache.revenueTrend.map(d => parseFloat(d.revenue));
+    const profit = analyticsCache.revenueTrend.map(d => parseFloat(d.profit));
 
     const revenueGradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
     revenueGradient.addColorStop(0, 'rgba(30, 224, 255, 0.36)');
@@ -1218,16 +1225,17 @@ async function initializePartTypeChart() {
   try {
     const res = await fetch('/api/admin/analytics/part-type-breakdown');
     const data = await res.json();
+    analyticsCache.partTypeBreakdown = Array.isArray(data) ? data : [];
 
     const colors = [chartColors.cyan, chartColors.green, chartColors.orange, chartColors.pink, chartColors.purple, chartColors.yellow, chartColors.teal, '#6366f1', '#ec4899', '#84cc16'];
 
     partTypeChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: data.map(d => d.part_type || 'Other'),
+        labels: analyticsCache.partTypeBreakdown.map(d => d.part_type || 'Other'),
         datasets: [{
-          data: data.map(d => parseFloat(d.total_revenue)),
-          backgroundColor: data.map((_, i) => colors[i % colors.length]),
+          data: analyticsCache.partTypeBreakdown.map(d => parseFloat(d.total_revenue)),
+          backgroundColor: analyticsCache.partTypeBreakdown.map((_, i) => colors[i % colors.length]),
           borderColor: '#0f1720',
           borderWidth: 2
         }]
@@ -1263,9 +1271,10 @@ async function initializeBrandMarginsChart() {
   try {
     const res = await fetch('/api/admin/analytics/brand-margins');
     const data = await res.json();
+    analyticsCache.brandMargins = Array.isArray(data) ? data : [];
 
     // Take top 10 brands
-    const top = data.slice(0, 10);
+    const top = analyticsCache.brandMargins.slice(0, 10);
 
     brandMarginsChart = new Chart(ctx, {
       type: 'bar',
@@ -1328,15 +1337,16 @@ async function initializeTierDistChart() {
   try {
     const res = await fetch('/api/admin/analytics/tier-distribution');
     const data = await res.json();
+    analyticsCache.tierDistribution = Array.isArray(data) ? data : [];
 
-    if (data.length === 0) {
+    if (analyticsCache.tierDistribution.length === 0) {
       // No ML data yet — show placeholder
       ctx.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-size:14px;text-align:center;padding:20px;">Run <code style="color:#1ee0ff;">php artisan ml:classify-products</code> to generate tier data</div>';
       return;
     }
 
-    const labels = data.map(d => d.ml_tier || 'Unclassified');
-    const counts = data.map(d => d.count);
+    const labels = analyticsCache.tierDistribution.map(d => d.ml_tier || 'Unclassified');
+    const counts = analyticsCache.tierDistribution.map(d => d.count);
     const bgColors = labels.map(l => (tierColors[l] || { bg: 'rgba(148,163,184,0.5)' }).bg);
     const bdColors = labels.map(l => (tierColors[l] || { border: '#94a3b8' }).border);
 
@@ -1393,6 +1403,7 @@ async function loadTopProductsMonthly(month) {
     // Sort by total quantity and take top 15
     allProducts.sort((a, b) => b.total_quantity - a.total_quantity);
     const top = allProducts.slice(0, 15);
+    analyticsCache.topProducts = top;
 
     if (top.length === 0) {
       table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b;">No data for selected month</td></tr>';
@@ -1425,14 +1436,15 @@ async function loadDeadStock() {
   try {
     const res = await fetch('/api/admin/analytics/dead-stock');
     const data = await res.json();
+    analyticsCache.deadStock = Array.isArray(data) ? data : [];
 
-    if (data.length === 0) {
+    if (analyticsCache.deadStock.length === 0) {
       table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#1eff8e;"><i class="fas fa-check-circle"></i> No dead stock detected</td></tr>';
       applyAdminSearchToSection("analytics");
       return;
     }
 
-    table.innerHTML = data.map(d => {
+    table.innerHTML = analyticsCache.deadStock.map(d => {
       const qty = parseInt(d.total_quantity);
       const statusClass = qty === 0 ? 'out-of-stock' : qty <= 1 ? 'low-stock' : 'low-stock';
       const statusLabel = qty === 0 ? 'No Sales' : qty <= 1 ? 'Critical' : 'Slow Moving';
@@ -1865,16 +1877,16 @@ function changePassword(event) {
   showToast("success", "Password changed successfully!");
 }
 
-function refreshDashboard() {
+async function refreshDashboard() {
+  await loadOrders(true);
+  await Promise.all([loadDashboardData(), loadDashboardStats(), loadNotifications()]);
   showToast("success", "Dashboard refreshed!");
-  loadDashboardData();
-  loadDashboardStats();
-  loadAnalyticsData();
 }
 
-function updateInventory() {
+async function updateInventory() {
+  await loadProductsData(true);
+  loadInventoryData();
   showToast("success", "Inventory updated!");
-  loadInventoryData(); 
 }
 
 function generateReport() {
@@ -2053,6 +2065,152 @@ function exportAnalytics() {
   showToast("success", "Analytics data exported successfully!");
 }
 
+async function ensureAnalyticsExportData() {
+  if (
+    analyticsCache.revenueTrend.length &&
+    analyticsCache.partTypeBreakdown.length &&
+    analyticsCache.brandMargins.length &&
+    analyticsCache.topProducts.length
+  ) {
+    return;
+  }
+
+  await loadAnalyticsData();
+  await Promise.all([
+    initializeRevenueChart(),
+    initializePartTypeChart(),
+    initializeBrandMarginsChart(),
+    initializeTierDistChart()
+  ]);
+}
+
+async function generateReport() {
+  await ensureAnalyticsExportData();
+
+  const totalRevenue = analyticsCache.revenueTrend.reduce((sum, row) => sum + Number(row.revenue || 0), 0);
+  const totalProfit = analyticsCache.revenueTrend.reduce((sum, row) => sum + Number(row.profit || 0), 0);
+  const totalUnits = analyticsCache.revenueTrend.reduce((sum, row) => sum + Number(row.units || 0), 0);
+  let reportContent = `ADE GARAGE - ANALYTICS REPORT
+Generated: ${new Date().toLocaleString()}
+================================
+
+SUMMARY
+-------
+Revenue Shown in Charts: PHP ${totalRevenue.toLocaleString()}
+Profit Shown in Charts: PHP ${totalProfit.toLocaleString()}
+Units Sold Shown in Charts: ${totalUnits.toLocaleString()}
+
+TOP PRODUCTS
+------------
+`;
+
+  analyticsCache.topProducts.slice(0, 10).forEach((product, index) => {
+    reportContent += `${index + 1}. ${product.product || "Unknown"}\n   Month: ${product.month_name || "-"} | Units: ${Number(product.total_quantity || 0).toLocaleString()} | Revenue: PHP ${Number(product.total_revenue || 0).toLocaleString()} | Profit: PHP ${Number(product.total_profit || 0).toLocaleString()}\n\n`;
+  });
+
+  reportContent += `\nSALES BY PART TYPE\n------------------\n`;
+  analyticsCache.partTypeBreakdown.slice(0, 10).forEach((part, index) => {
+    reportContent += `${index + 1}. ${part.part_type || "Other"} | Units: ${Number(part.total_quantity || 0).toLocaleString()} | Revenue: PHP ${Number(part.total_revenue || 0).toLocaleString()}\n`;
+  });
+
+  reportContent += `\nBRAND PROFIT MARGINS\n--------------------\n`;
+  analyticsCache.brandMargins.slice(0, 10).forEach((brand, index) => {
+    reportContent += `${index + 1}. ${brand.brand || "Unknown"} | Revenue: PHP ${Number(brand.total_revenue || 0).toLocaleString()} | Margin: ${Number(brand.profit_margin || 0).toLocaleString()}%\n`;
+  });
+
+  reportContent += `\nDEAD STOCK ALERT\n----------------\n`;
+  analyticsCache.deadStock.slice(0, 10).forEach((item, index) => {
+    reportContent += `${index + 1}. ${item.product || "Unknown"} | Units Sold: ${Number(item.total_quantity || 0).toLocaleString()} | Last Sale: ${item.last_sale_date || "-"}\n`;
+  });
+
+  const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ADE-Garage-Analytics-Report-${new Date().toISOString().split('T')[0]}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+
+  showToast("success", "Analytics report generated!");
+}
+
+async function exportAnalytics() {
+  await ensureAnalyticsExportData();
+
+  const rows = [
+    ...analyticsCache.revenueTrend.map((row) => [
+      'Monthly Revenue Trend',
+      row.month_name,
+      '',
+      '',
+      Number(row.units || 0),
+      Number(row.revenue || 0),
+      Number(row.profit || 0),
+      ''
+    ]),
+    ...analyticsCache.partTypeBreakdown.map((row) => [
+      'Sales by Part Type',
+      row.part_type || 'Other',
+      '',
+      '',
+      Number(row.total_quantity || 0),
+      Number(row.total_revenue || 0),
+      Number(row.total_profit || 0),
+      ''
+    ]),
+    ...analyticsCache.brandMargins.map((row) => [
+      'Brand Profit Margins',
+      row.brand || 'Unknown',
+      '',
+      '',
+      Number(row.total_units || 0),
+      Number(row.total_revenue || 0),
+      Number(row.total_profit || 0),
+      `${Number(row.profit_margin || 0)}%`
+    ]),
+    ...analyticsCache.tierDistribution.map((row) => [
+      'Smart Product Ratings Distribution',
+      row.ml_tier || 'Unclassified',
+      '',
+      '',
+      Number(row.count || 0),
+      '',
+      '',
+      ''
+    ]),
+    ...analyticsCache.topProducts.map((row) => [
+      'Top Products per Month',
+      row.product || 'Unknown',
+      row.brand || '',
+      row.part_type || '',
+      Number(row.total_quantity || 0),
+      Number(row.total_revenue || 0),
+      Number(row.total_profit || 0),
+      row.month_name || ''
+    ]),
+    ...analyticsCache.deadStock.map((row) => [
+      'Dead Stock Alert',
+      row.product || 'Unknown',
+      row.brand || '',
+      row.part_type || '',
+      Number(row.total_quantity || 0),
+      Number(row.total_revenue || 0),
+      '',
+      row.last_sale_date || ''
+    ])
+  ];
+
+  downloadCsv(
+    `ADE-Garage-Analytics-${new Date().toISOString().split('T')[0]}.csv`,
+    ['Section', 'Name', 'Brand', 'Part Type', 'Units/Count', 'Revenue', 'Profit', 'Extra'],
+    rows
+  );
+
+  showToast("success", "Analytics data exported successfully!");
+}
+
 function logout() {
   if (confirm("Are you sure you want to logout?")) {
     window.location.href = "/home_landing";
@@ -2160,9 +2318,22 @@ async function confirmAddStock() {
 
     const data = await response.json();
     if (response.ok && data.success) {
+      const index = productsData.findIndex((entry) => String(entry.id) === String(productId));
+      if (index !== -1) {
+        productsData[index] = data.product || {
+          ...productsData[index],
+          stock: Number(product.stock) + quantityToAdd
+        };
+      }
+      productsLoadedAt = 0;
+      renderProductsData();
+      loadInventoryData();
       showToast("success", `Added ${quantityToAdd} units to inventory!`);
-      await refreshAdminSection(getActiveAdminSection());
       closeAddStockModal();
+      await loadProductsData(true);
+      if (getActiveAdminSection() === "inventory") {
+        loadInventoryData();
+      }
     } else {
       showToast("error", data.message || "Failed to update stock");
     }
@@ -2262,16 +2433,12 @@ async function loadOrders(force = false) {
       return;
     }
 
-    console.log('Loading orders from /api/orders...');
     const response = await fetch('/api/orders');
     const data = await response.json();
-    
-    console.log('Orders API response:', data);
     
     if (data.success) {
       realOrdersData = data.orders;
       ordersLoadedAt = Date.now();
-      console.log('Orders data loaded:', realOrdersData);
       displayOrdersInTable();
     } else {
       console.error('Orders API returned success: false');
@@ -2541,31 +2708,25 @@ function filterOrdersByStatus(status) {
 }
 
 // Load notifications from recent orders
-async function loadNotifications() {
+async function loadNotifications(force = false) {
   try {
-    console.log('Loading notifications...');
-    const response = await fetch('/api/orders');
-    const data = await response.json();
-    console.log('Notifications data:', data);
-    
-    if (data.success) {
-      const orders = data.orders;
-      console.log('Total orders:', orders.length);
+    if (force || realOrdersData.length === 0 || Date.now() - ordersLoadedAt >= ADMIN_CACHE_TTL) {
+      await loadOrders(force);
+    }
+
+    const orders = realOrdersData;
       
       // Get recent orders (last 5) as notifications
       const recentOrders = orders.slice(0, 5);
-      console.log('Recent orders for notifications:', recentOrders.length);
       
       // Update notification count
       const notificationCount = document.getElementById('notificationCount');
       if (notificationCount) {
         notificationCount.textContent = recentOrders.length;
-        console.log('Updated notification count to:', recentOrders.length);
       }
       
       // Update notification panel content
       const notificationContent = document.getElementById('notificationContent');
-      console.log('Notification content element:', notificationContent);
       
       if (notificationContent) {
         if (recentOrders.length === 0) {
@@ -2589,9 +2750,7 @@ async function loadNotifications() {
             `;
           }).join('');
         }
-        console.log('Notification content updated');
       }
-    }
   } catch (error) {
     console.error('Error loading notifications:', error);
   }
