@@ -58,6 +58,63 @@ class SupabaseAuthService
         ]);
     }
 
+    public function resendSignupOtp(string $email): array
+    {
+        return $this->requestJson('POST', '/auth/v1/resend', [
+            'email' => $email,
+            'type'  => 'signup',
+        ]);
+    }
+
+    public function getOAuthRedirectUrl(
+        string $provider,
+        string $redirectTo,
+        string $codeChallenge
+    ): string {
+        abort_unless(in_array($provider, ['google', 'facebook'], true), 404);
+
+        $query = http_build_query([
+            'provider' => $provider,
+            'redirect_to' => $redirectTo,
+            'code_challenge' => $codeChallenge,
+            'code_challenge_method' => 's256',
+        ]);
+
+        return $this->url . '/auth/v1/authorize?' . $query;
+    }
+
+    public function assertOAuthProviderEnabled(string $authorizeUrl, string $provider): void
+    {
+        $response = $this->http()
+            ->withOptions(['allow_redirects' => false])
+            ->acceptJson()
+            ->get($authorizeUrl);
+
+        if ($response->status() !== 400) {
+            return;
+        }
+
+        $payload = $response->json();
+        $message = is_array($payload)
+            ? (string) ($payload['msg'] ?? $payload['message'] ?? $payload['error_description'] ?? $payload['error'] ?? '')
+            : '';
+
+        if (str_contains(strtolower($message), 'provider is not enabled')) {
+            throw new \RuntimeException(
+                ucfirst($provider) . ' login is not enabled in Supabase. Enable the ' . ucfirst($provider) .
+                ' provider in Supabase Auth settings for this project.'
+            );
+        }
+    }
+
+    public function exchangeOAuthCode(string $code, string $codeVerifier): array
+    {
+        return $this->requestJson('POST', '/auth/v1/token?grant_type=pkce', [
+            'auth_code' => $code,
+            'code_verifier' => $codeVerifier,
+        ]);
+    }
+
     public function adminCreateUser(string $email, string $password, array $data = []): array
     {
         // Must use service role key for Admin API endpoints
@@ -83,7 +140,7 @@ class SupabaseAuthService
         $bucket    = $this->getProductImagesBucket();
         $endpoint  = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
-        $response = Http::withoutVerifying()
+        $response = $this->http()
             ->withHeaders([
                 'apikey'        => $this->serviceRoleKey,
                 'Authorization' => 'Bearer ' . $this->serviceRoleKey,
@@ -113,7 +170,7 @@ class SupabaseAuthService
 
         $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
-        Http::withoutVerifying()
+        $this->http()
             ->withHeaders([
                 'apikey'        => $this->serviceRoleKey,
                 'Authorization' => 'Bearer ' . $this->serviceRoleKey,
@@ -129,7 +186,7 @@ class SupabaseAuthService
         $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
         $mimeType = File::mimeType($filePath);
 
-        $response = Http::withoutVerifying()
+        $response = $this->http()
             ->withHeaders([
                 'apikey'        => $this->serviceRoleKey,
                 'Authorization' => 'Bearer ' . $this->serviceRoleKey,
@@ -196,11 +253,11 @@ class SupabaseAuthService
             throw new \RuntimeException('Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env');
         }
 
-        $request = Http::withoutVerifying() // Safe for local dev; remove on production if desired
-            ->timeout(8)
-            ->connectTimeout(3)
+        $apiKey = $bearer === $this->serviceRoleKey ? $this->serviceRoleKey : $this->anonKey;
+
+        $request = $this->http()
             ->withHeaders([
-                'apikey'        => $this->anonKey,
+                'apikey'        => $apiKey,
                 'Authorization' => 'Bearer ' . ($bearer ?: $this->anonKey),
             ])
             ->acceptJson();
@@ -220,5 +277,14 @@ class SupabaseAuthService
         }
 
         return (array) $response->json();
+    }
+
+    private function http(): \Illuminate\Http\Client\PendingRequest
+    {
+        $verify = config('services.supabase.ca_bundle') ?: true;
+
+        return Http::withOptions(['verify' => $verify])
+            ->timeout(15)
+            ->connectTimeout(5);
     }
 }

@@ -24,6 +24,7 @@ return [
         'anon_key'         => env('SUPABASE_ANON_KEY'),
         'service_role_key' => env('SUPABASE_SERVICE_ROLE_KEY'),
         'storage_bucket'   => env('SUPABASE_PRODUCT_IMAGES_BUCKET', 'product-images'),
+        'ca_bundle'        => env('CURL_CA_BUNDLE', env('SSL_CERT_FILE')),
     ],
 
     'google' => [

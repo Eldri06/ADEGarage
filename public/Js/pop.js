@@ -1,8 +1,10 @@
 (function () {
   const FOCUSABLE = 'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])';
   const PRODUCT_PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
+  const RESEND_COOLDOWN_SECONDS = 60;
   let releaseFocusTrapHandler = null;
   let lastFocusedElement = null;
+  let resendCooldownTimer = null;
 
   function getElements() {
     return {
@@ -22,12 +24,19 @@
       openForgot: document.getElementById('openForgot'),
       backToLogin: document.getElementById('backToLogin'),
       authServerError: document.getElementById('authServerError'),
+      signupEmailForm: document.getElementById('signupEmailForm'),
       loginForm: document.getElementById('loginForm'),
       signupForm: document.getElementById('signupForm'),
       verifySignupForm: document.getElementById('verifySignupForm'),
+      resendCodeBtn: document.getElementById('resendCodeBtn'),
+      resendCountdown: document.getElementById('resendCountdown'),
+      verifyCodeMessage: document.getElementById('verifyCodeMessage'),
       loginBtn: document.getElementById('loginBtn'),
+      sendSignupCodeBtn: document.getElementById('sendSignupCodeBtn'),
       signupBtn: document.getElementById('signupBtn'),
       verifySignupBtn: document.getElementById('verifySignupBtn'),
+      signupVerifiedEmail: document.getElementById('signupVerifiedEmail'),
+      signupVerifiedEmailDisplay: document.getElementById('signupVerifiedEmailDisplay'),
     };
   }
 
@@ -45,6 +54,16 @@
 
     authServerError.textContent = '';
     authServerError.classList.add('d-none');
+  }
+
+  function setVerifyMessage(message = '', isError = false) {
+    const { verifyCodeMessage } = getElements();
+    if (!verifyCodeMessage) {
+      return;
+    }
+
+    verifyCodeMessage.textContent = message;
+    verifyCodeMessage.style.color = isError ? 'var(--neon-orange)' : 'var(--neutral-gray)';
   }
 
   function activateTab(tabName = 'login') {
@@ -183,6 +202,84 @@
     button.textContent = isLoading ? loadingText : button.dataset.defaultLabel;
   }
 
+  function startResendCooldown(seconds = RESEND_COOLDOWN_SECONDS) {
+    const { resendCodeBtn, resendCountdown } = getElements();
+    if (!resendCodeBtn || !resendCountdown) {
+      return;
+    }
+
+    clearInterval(resendCooldownTimer);
+    let remaining = seconds;
+    if (resendCodeBtn.dataset.defaultLabel) {
+      resendCodeBtn.textContent = resendCodeBtn.dataset.defaultLabel;
+    }
+    resendCodeBtn.disabled = true;
+
+    const render = () => {
+      resendCountdown.textContent = remaining > 0
+        ? `You can resend a code in ${remaining}s.`
+        : '';
+      resendCodeBtn.disabled = remaining > 0;
+      remaining -= 1;
+
+      if (remaining < 0) {
+        clearInterval(resendCooldownTimer);
+        resendCooldownTimer = null;
+      }
+    };
+
+    render();
+    resendCooldownTimer = setInterval(render, 1000);
+  }
+
+  function setSignupDetailsEnabled(isEnabled) {
+    ['suUsername', 'suPwd', 'agreeTerms'].forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.disabled = !isEnabled;
+      }
+    });
+  }
+
+  function unlockSignupDetails(email) {
+    const { signupEmailForm, signupForm, signupVerifiedEmail, signupVerifiedEmailDisplay } = getElements();
+    if (signupEmailForm) {
+      signupEmailForm.hidden = true;
+    }
+    if (signupForm) {
+      signupForm.hidden = false;
+    }
+    if (signupVerifiedEmail) {
+      signupVerifiedEmail.value = email;
+    }
+    if (signupVerifiedEmailDisplay) {
+      signupVerifiedEmailDisplay.value = email;
+    }
+
+    setSignupDetailsEnabled(true);
+    activateTab('signup');
+    document.getElementById('suUsername')?.focus();
+  }
+
+  function resetManualSignup() {
+    const { signupEmailForm, signupForm, verifySignupForm } = getElements();
+    if (signupEmailForm) {
+      signupEmailForm.hidden = false;
+    }
+    if (signupForm) {
+      signupForm.hidden = true;
+      signupForm.reset();
+    }
+    if (verifySignupForm) {
+      verifySignupForm.reset();
+    }
+
+    setSignupDetailsEnabled(false);
+    setVerifyMessage('');
+    clearInterval(resendCooldownTimer);
+    resendCooldownTimer = null;
+  }
+
   function extractErrorMessage(payload) {
     if (!payload || typeof payload !== 'object') {
       return 'Something went wrong. Please try again.';
@@ -239,16 +336,34 @@
         const signupEmail = document.getElementById('suEmail')?.value || '';
         const verifyEmail = document.getElementById('verifyEmail');
         if (verifyEmail) {
-          verifyEmail.value = signupEmail;
+          verifyEmail.value = payload.email || signupEmail;
         }
 
-        setAuthError(payload.message || 'We sent a verification code to your email.');
+        const { signupEmailForm } = getElements();
+        if (signupEmailForm) {
+          signupEmailForm.hidden = true;
+        }
+
+        setAuthError(payload.message || `Verification code sent to ${payload.email || signupEmail}`);
+        setVerifyMessage(payload.message || 'Check your email for the latest verification code.');
         activateTab('verify');
+        startResendCooldown();
         document.getElementById('verifyCode')?.focus();
         return;
       }
 
-      setAuthError(extractErrorMessage(payload));
+      if (response.ok && payload.success && payload.email_verified) {
+        setAuthError(payload.message || 'Verification successful.');
+        setVerifyMessage(payload.message || 'Verification successful.');
+        unlockSignupDetails(payload.email || document.getElementById('verifyEmail')?.value || '');
+        return;
+      }
+
+      const message = extractErrorMessage(payload);
+      setAuthError(message);
+      if (tabName === 'verify') {
+        setVerifyMessage(message, true);
+      }
       activateTab(tabName);
     } catch (error) {
       console.error('Authentication request failed:', error);
@@ -329,9 +444,12 @@
       openForgot,
       backToLogin,
       loginForm,
+      signupEmailForm,
       signupForm,
       verifySignupForm,
+      resendCodeBtn,
       loginBtn,
+      sendSignupCodeBtn,
       signupBtn,
       verifySignupBtn,
     } = getElements();
@@ -370,6 +488,7 @@
     tabSignup?.addEventListener('click', () => activateTab('signup'));
     gotoSignUp?.addEventListener('click', (event) => {
       event.preventDefault();
+      resetManualSignup();
       activateTab('signup');
     });
     gotoLogin?.addEventListener('click', (event) => {
@@ -379,7 +498,9 @@
     restartSignup?.addEventListener('click', (event) => {
       event.preventDefault();
       setAuthError('');
+      resetManualSignup();
       activateTab('signup');
+      document.getElementById('suEmail')?.focus();
     });
     openForgot?.addEventListener('click', (event) => {
       event.preventDefault();
@@ -395,6 +516,11 @@
       await submitAuthForm(loginForm, loginBtn, 'login', 'LOGGING IN...');
     });
 
+    signupEmailForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAuthForm(signupEmailForm, sendSignupCodeBtn, 'signup', 'SENDING CODE...');
+    });
+
     signupForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       await submitAuthForm(signupForm, signupBtn, 'signup', 'CREATING ACCOUNT...');
@@ -402,7 +528,55 @@
 
     verifySignupForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
+      setVerifyMessage('');
       await submitAuthForm(verifySignupForm, verifySignupBtn, 'verify', 'VERIFYING...');
+    });
+
+    resendCodeBtn?.addEventListener('click', async () => {
+      if (!verifySignupForm || !resendCodeBtn) {
+        return;
+      }
+
+      const verifyEmail = document.getElementById('verifyEmail');
+      if (!verifyEmail?.reportValidity()) {
+        return;
+      }
+
+      setAuthError('');
+      setVerifyMessage('');
+      setButtonLoading(resendCodeBtn, 'SENDING...', true);
+
+      try {
+        const formData = new FormData(verifySignupForm);
+        const response = await fetch(resendCodeBtn.dataset.action || '/signup/resend', {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        const message = extractErrorMessage(payload);
+
+        if (response.ok && payload.success) {
+          setVerifyMessage(payload.message || 'We sent a new verification code.');
+          startResendCooldown();
+          document.getElementById('verifyCode')?.focus();
+          return;
+        }
+
+        setVerifyMessage(message, true);
+        setAuthError(message);
+      } catch (error) {
+        console.error('Resend code request failed:', error);
+        setVerifyMessage('Network error. Please try again.', true);
+      } finally {
+        if (!resendCooldownTimer) {
+          setButtonLoading(resendCodeBtn, 'SENDING...', false);
+        }
+      }
     });
 
     if (backdrop?.dataset.openOnError === 'true') {

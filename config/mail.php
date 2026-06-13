@@ -1,5 +1,10 @@
 <?php
 
+$smtpPassword = env('MAIL_PASSWORD');
+if ($smtpPassword === '${SENDGRID_API_KEY}') {
+    $smtpPassword = env('SENDGRID_API_KEY');
+}
+
 return [
 
     /*
@@ -40,7 +45,7 @@ return [
             'port' => env('MAIL_PORT', 587),
             'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             'username' => env('MAIL_USERNAME'),
-            'password' => env('MAIL_PASSWORD'),
+            'password' => $smtpPassword,
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],

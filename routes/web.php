@@ -19,12 +19,14 @@ Route::get('/', function () {
     return view('home_landing');
 })->name('login');
 
+Route::post('/signup/send-code', [UserController::class, 'sendSignupCode'])->name('signup.code.send');
 Route::post('/signup', [UserController::class, 'signup']);
 Route::post('/signup/verify', [UserController::class, 'verifySignupCode'])->name('signup.verify');
+Route::post('/signup/resend', [UserController::class, 'resendSignupCode'])->name('signup.resend');
 Route::post('/login',  [UserController::class, 'login']);
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
 Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->whereIn('provider', ['google', 'facebook']);
-Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->whereIn('provider', ['google', 'facebook']);
+Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');
 
 Route::get('/home_landing', function () {
     return view('home_landing');

@@ -229,35 +229,43 @@
 
 <section id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" class="mb-panel" hidden>
           <h2 class="auth-title">CREATE ACCOUNT</h2>
-          <p class="auth-sub">Create your new account by filling out the form below</p>
+          <p class="auth-sub">Verify your email, then complete your account.</p>
 
-  <form id="signupForm" class="form-glass" autocomplete="on" action="/signup" method="POST">
+  <form id="signupEmailForm" class="form-glass" autocomplete="on" action="{{ route('signup.code.send') }}" method="POST">
     @csrf
     <div class="row g-3">
-      <div class="col-12">
-        <label class="form-label help-text">username</label>
-        <input id="suUsername" name="username"type="text" class="form-control" placeholder="Choose a username" value="{{ old('username') }}">
-        <div class="invalid-feedback">Enter a username</div>
-      </div>
-              <div class="col-12">
+      <div class="col-12" id="signupEmailStep">
         <label class="form-label help-text">Email</label>
-        <input id="suEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" value="{{ old('email') }}">
+        <input id="suEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" value="{{ old('email') }}" required>
         <div class="invalid-feedback">Enter a valid email</div>
       </div>
+    </div>
+    <div style="height:12px"></div>
+    <button id="sendSignupCodeBtn" type="submit" class="btn-orange btn-neon">CONTINUE</button>
+  </form>
 
-      <div class="col-6">
-        <label class="form-label help-text">Phone (optional)</label>
-        <input id="suPhone" type="tel" class="form-control" placeholder="+63" inputmode="tel" >
+  <form id="signupForm" class="form-glass" autocomplete="on" action="/signup" method="POST" hidden>
+    @csrf
+    <input id="signupVerifiedEmail" name="email" type="hidden" value="">
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label help-text">Verified email</label>
+        <input id="signupVerifiedEmailDisplay" type="email" class="form-control" readonly>
       </div>
-              <div class="col-6 input-with-icon">
+      <div class="col-12">
+        <label class="form-label help-text">Username</label>
+        <input id="suUsername" name="username" type="text" class="form-control" placeholder="Choose a username" value="{{ old('username') }}" required disabled>
+        <div class="invalid-feedback">Enter a username</div>
+      </div>
+      <div class="col-12 input-with-icon">
         <label class="form-label help-text">Password</label>
-        <input id="suPwd" type="password" name="password" class="form-control" placeholder="Create password">
+        <input id="suPwd" type="password" name="password" class="form-control" placeholder="Create password" minlength="8" required disabled>
         <span id="suPwdToggle" class="input-icon" role="button" tabindex="0" aria-label="Toggle password visibility"><i class="bi bi-eye"></i></span>
-        <div class="invalid-feedback">Enter a password</div>
+        <div class="invalid-feedback">Enter a password with at least 8 characters</div>
       </div>
       <div class="col-12">
                 <div class="form-check">
-                  <input id="agreeTerms" class="form-check-input" type="checkbox" />
+                  <input id="agreeTerms" class="form-check-input" type="checkbox" required disabled />
                   <label class="form-check-label" for="agreeTerms">I agree to Terms &amp; Privacy</label>
                 </div>
               </div>
@@ -283,14 +291,18 @@
             @csrf
             <div class="mb-3">
               <label class="form-label help-text">Email</label>
-              <input id="verifyEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required />
+              <input id="verifyEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required readonly />
             </div>
             <div class="mb-3">
               <label class="form-label help-text">Verification code</label>
               <input id="verifyCode" name="code" type="text" class="form-control" placeholder="Enter code" inputmode="numeric" autocomplete="one-time-code" required />
+              <div id="verifyCodeMessage" class="help-text" aria-live="polite" style="margin-top:8px;"></div>
             </div>
             <button id="verifySignupBtn" type="submit" class="btn-neon">VERIFY</button>
-            <div class="micro">Need a new code? <a href="#" id="restartSignup">Sign up again</a></div>
+            <div class="micro">Didn't receive a code?</div>
+            <button id="resendCodeBtn" type="button" class="btn-neon" data-action="{{ route('signup.resend') }}" style="margin-top:8px;">RESEND CODE</button>
+            <div id="resendCountdown" class="micro" aria-live="polite"></div>
+            <div class="micro"><a href="#" id="restartSignup">Use a different email</a></div>
           </form>
         </section>
 

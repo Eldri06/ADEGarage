@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Mail\WelcomeUserMail;
+use App\Mail\SignupVerificationCodeMail;
 use App\Services\SupabaseAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,10 +12,62 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Laravel\Socialite\Facades\Socialite;
 
 class UserController extends Controller
 {
+    private const SIGNUP_CODE_TTL_MINUTES = 10;
+    private const SIGNUP_RESEND_COOLDOWN_SECONDS = 60;
+
+    public function sendSignupCode(Request $request)
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $email = strtolower($request->email);
+
+        if (User::where('email', $email)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An account with this email already exists. Please log in instead.',
+            ], 422);
+        }
+
+        $current = $request->session()->get('pending_signup_email');
+        if (
+            $current &&
+            strcasecmp($current['email'] ?? '', $email) === 0 &&
+            !empty($current['resend_available_at']) &&
+            now()->lt($current['resend_available_at'])
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please wait before requesting another verification code.',
+            ], 429);
+        }
+
+        try {
+            $this->sendManualSignupCode($request, $email);
+
+            return response()->json([
+                'success' => true,
+                'needs_verification' => true,
+                'email' => $email,
+                'message' => 'Verification code sent to ' . $email,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Signup verification code failed to send.', [
+                'email' => $email,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'We could not send the verification code. Please try again.',
+            ], 422);
+        }
+    }
+
     public function signup(Request $request, SupabaseAuthService $supabase)
     {
         $request->validate([
@@ -23,28 +76,57 @@ class UserController extends Controller
             'password' => ['required', 'min:8'],
         ]);
 
+        $email = strtolower($request->email);
+        $pendingEmail = $request->session()->get('pending_signup_email');
+
+        if (
+            !$pendingEmail ||
+            strcasecmp($pendingEmail['email'] ?? '', $email) !== 0 ||
+            empty($pendingEmail['verified_at'])
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please verify your email before completing signup.',
+            ], 422);
+        }
+
         try {
-            $supabase->signUp(
-                $request->email,
+            $supabase->adminCreateUser(
+                $email,
                 $request->password,
                 ['username' => $request->username]
             );
 
-            $request->session()->put('pending_signup', [
-                'username' => $request->username,
-                'email' => $request->email,
-                'password_hash' => Hash::make($request->password),
-            ]);
+            $session = $supabase->signInWithPassword($email, $request->password);
+
+            $request->session()->put('supabase.access_token', $session['access_token'] ?? null);
+            $request->session()->put('supabase.refresh_token', $session['refresh_token'] ?? null);
+            $request->session()->forget('pending_signup_email');
+            $request->session()->regenerate();
+
+            $localUser = $this->resolveLocalUser($email, $session['user']['id'] ?? null);
+            $wasRecentlyCreated = !$localUser->exists;
+            $localUser->username = $localUser->username ?: $request->username;
+            $localUser->name = $localUser->name ?: $request->username;
+            $localUser->password = $localUser->password ?: Hash::make($request->password);
+            $localUser->email_verified_at = $localUser->email_verified_at ?: now();
+            $localUser->save();
+
+            Auth::login($localUser);
+
+            if ($wasRecentlyCreated) {
+                $this->sendWelcomeEmail($localUser, 'manual_signup');
+            }
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'needs_verification' => true,
-                    'message' => 'We sent a verification code to your email.',
+                    'redirect' => route('customer_home'),
+                    'message' => 'Account created successfully.',
                 ]);
             }
 
-            return back()->with('status', 'We sent a verification code to your email.');
+            return redirect()->route('customer_home');
 
         } catch (\Throwable $e) {
             if ($request->expectsJson()) {
@@ -67,41 +149,85 @@ class UserController extends Controller
             'code' => ['required', 'digits_between:4,8'],
         ]);
 
-        $pendingSignup = $request->session()->get('pending_signup');
+        $pendingSignup = $request->session()->get('pending_signup_email');
 
         if (!$pendingSignup || strcasecmp($pendingSignup['email'], $request->email) !== 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please sign up again before verifying your code.',
+                'message' => 'Please request a verification code before verifying your email.',
             ], 422);
         }
 
         try {
-            $session = $supabase->verifySignupOtp($request->email, $request->code);
+            if (now()->gt($pendingSignup['expires_at'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Verification code expired. Please request a new code.',
+                ], 422);
+            }
 
-            $request->session()->put('supabase.access_token', $session['access_token'] ?? null);
-            $request->session()->put('supabase.refresh_token', $session['refresh_token'] ?? null);
-            $request->session()->forget('pending_signup');
-            $request->session()->regenerate();
+            if (!Hash::check($request->code, $pendingSignup['code_hash'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid verification code.',
+                ], 422);
+            }
 
-            $localUser = User::firstOrNew(['email' => $request->email]);
-            $localUser->username = $localUser->username ?: $pendingSignup['username'];
-            $localUser->name = $localUser->name ?: $pendingSignup['username'];
-            $localUser->password = $localUser->password ?: $pendingSignup['password_hash'];
-            $localUser->email_verified_at = $localUser->email_verified_at ?: now();
-            $localUser->save();
-
-            Auth::login($localUser);
-            $this->sendWelcomeEmail($localUser);
+            $pendingSignup['verified_at'] = now();
+            $request->session()->put('pending_signup_email', $pendingSignup);
 
             return response()->json([
                 'success' => true,
-                'redirect' => route('customer_home'),
+                'email_verified' => true,
+                'email' => strtolower($request->email),
+                'message' => 'Verification successful. Complete your account details.',
             ]);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function resendSignupCode(Request $request)
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $pendingSignup = $request->session()->get('pending_signup_email');
+
+        if (!$pendingSignup || strcasecmp($pendingSignup['email'], $request->email) !== 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please enter your email before requesting a new code.',
+            ], 422);
+        }
+
+        if (!empty($pendingSignup['resend_available_at']) && now()->lt($pendingSignup['resend_available_at'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please wait before requesting another verification code.',
+            ], 429);
+        }
+
+        try {
+            $this->sendManualSignupCode($request, strtolower($request->email));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Resend successful. We sent a new verification code.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Signup verification code resend failed.', [
+                'email' => strtolower($request->email),
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'We could not resend the verification code. Please try again.',
             ], 422);
         }
     }
@@ -114,25 +240,6 @@ class UserController extends Controller
         ]);
 
         try {
-            $existingUser = User::where('email', $request->email)->first();
-            if ($existingUser && Hash::check($request->password, $existingUser->password)) {
-                $request->session()->regenerate();
-                Auth::login($existingUser);
-
-                $redirectRoute = $existingUser->is_admin
-                    ? route('admin')
-                    : route('customer_home');
-
-                if ($request->expectsJson()) {
-                    return response()->json([
-                        'success' => true,
-                        'redirect' => $redirectRoute,
-                    ]);
-                }
-
-                return redirect()->to($redirectRoute);
-            }
-
             // 1. Authenticate with Supabase
             $session = $supabase->signInWithPassword($request->email, $request->password);
 
@@ -148,10 +255,12 @@ class UserController extends Controller
             }
 
             // 4. Sync local user record
-            $localUser = User::firstOrNew(['email' => $request->email]);
+            $localUser = $this->resolveLocalUser($request->email, $session['user']['id'] ?? null);
             $localUser->username = $localUser->username ?: $username;
             $localUser->name     = $localUser->name     ?: $localUser->username;
             $localUser->password = $localUser->password ?: bcrypt(str()->random(32));
+            $localUser->email_verified_at = $localUser->email_verified_at
+                ?: (!empty($session['user']['email_confirmed_at']) ? now() : null);
             $localUser->save();
 
             // 5. Log into Laravel session
@@ -194,33 +303,84 @@ class UserController extends Controller
         return redirect()->route('home_landing');
     }
 
-    public function redirectToProvider(string $provider)
+    public function redirectToProvider(string $provider, Request $request, SupabaseAuthService $supabase)
     {
         abort_unless(in_array($provider, ['google', 'facebook'], true), 404);
 
-        return Socialite::driver($provider)->redirect();
+        $codeVerifier = rtrim(strtr(base64_encode(random_bytes(64)), '+/', '-_'), '=');
+        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
+        $state = Str::random(40);
+
+        $request->session()->put('oauth_pkce', [
+            'provider' => $provider,
+            'code_verifier' => $codeVerifier,
+            'state' => $state,
+        ]);
+
+        $authorizeUrl = $supabase->getOAuthRedirectUrl(
+            $provider,
+            route('oauth.callback', [
+                'provider' => $provider,
+                'oauth_state' => $state,
+            ]),
+            $codeChallenge
+        );
+
+        try {
+            $supabase->assertOAuthProviderEnabled($authorizeUrl, $provider);
+        } catch (\Throwable $e) {
+            $request->session()->forget('oauth_pkce');
+
+            return redirect()->route('home_landing')
+                ->withErrors(['login' => $e->getMessage()]);
+        }
+
+        return redirect()->away($authorizeUrl);
     }
 
-    public function handleProviderCallback(string $provider, Request $request)
+    public function handleProviderCallback(string $provider, Request $request, SupabaseAuthService $supabase)
     {
         abort_unless(in_array($provider, ['google', 'facebook'], true), 404);
 
         try {
-            $socialUser = Socialite::driver($provider)->user();
-            $email = $socialUser->getEmail();
-
-            if (!$email) {
-                return redirect()->route('home_landing')
-                    ->withErrors(['login' => ucfirst($provider) . ' did not return an email address.']);
+            if ($request->filled('error')) {
+                throw new \RuntimeException((string) $request->query('error_description', $request->query('error')));
             }
 
-            $baseUsername = $socialUser->getName() ?: Str::before($email, '@');
+            $oauth = $request->session()->pull('oauth_pkce');
+            if (
+                !$oauth ||
+                ($oauth['provider'] ?? null) !== $provider ||
+                !hash_equals((string) ($oauth['state'] ?? ''), (string) $request->query('oauth_state', ''))
+            ) {
+                throw new \RuntimeException('Invalid OAuth session. Please try again.');
+            }
+
+            $code = (string) $request->query('code', '');
+            if ($code === '') {
+                throw new \RuntimeException('OAuth provider did not return an authorization code.');
+            }
+
+            $session = $supabase->exchangeOAuthCode($code, (string) $oauth['code_verifier']);
+            $supabaseUser = $session['user'] ?? [];
+            $email = $supabaseUser['email'] ?? null;
+
+            if (!$email) {
+                throw new \RuntimeException(ucfirst($provider) . ' did not return an email address.');
+            }
+
+            $request->session()->put('supabase.access_token', $session['access_token'] ?? null);
+            $request->session()->put('supabase.refresh_token', $session['refresh_token'] ?? null);
+
+            $metadata = $supabaseUser['user_metadata'] ?? [];
+            $displayName = $metadata['full_name'] ?? $metadata['name'] ?? null;
+            $baseUsername = $displayName ?: Str::before($email, '@');
             $username = $this->uniqueUsername(Str::slug($baseUsername, '_') ?: Str::before($email, '@'));
 
-            $localUser = User::firstOrNew(['email' => $email]);
+            $localUser = $this->resolveLocalUser($email, $supabaseUser['id'] ?? null);
             $wasRecentlyCreated = !$localUser->exists;
             $localUser->username = $localUser->username ?: $username;
-            $localUser->name = $localUser->name ?: ($socialUser->getName() ?: $localUser->username);
+            $localUser->name = $localUser->name ?: ($displayName ?: $localUser->username);
             $localUser->password = $localUser->password ?: Hash::make(Str::random(32));
             $localUser->email_verified_at = $localUser->email_verified_at ?: now();
             $localUser->save();
@@ -229,7 +389,7 @@ class UserController extends Controller
             Auth::login($localUser);
 
             if ($wasRecentlyCreated) {
-                $this->sendWelcomeEmail($localUser);
+                $this->sendWelcomeEmail($localUser, $provider . '_oauth_signup');
             }
 
             return redirect()->route($localUser->is_admin ? 'admin' : 'customer_home');
@@ -237,6 +397,36 @@ class UserController extends Controller
             return redirect()->route('home_landing')
                 ->withErrors(['login' => 'Unable to sign in with ' . ucfirst($provider) . ': ' . $e->getMessage()]);
         }
+    }
+
+    private function resolveLocalUser(string $email, ?string $supabaseUserId): User
+    {
+        $email = strtolower($email);
+        $user = null;
+
+        if ($supabaseUserId) {
+            $user = User::where('supabase_user_id', $supabaseUserId)->first();
+        }
+
+        $emailUser = User::where('email', $email)->first();
+
+        if ($user && $emailUser && $user->id !== $emailUser->id) {
+            throw new \RuntimeException('This Supabase identity is already linked to another local account.');
+        }
+
+        $user = $user ?: $emailUser ?: new User(['email' => $email]);
+
+        if ($supabaseUserId) {
+            if ($user->supabase_user_id && $user->supabase_user_id !== $supabaseUserId) {
+                throw new \RuntimeException('This email is already linked to a different Supabase account.');
+            }
+
+            $user->supabase_user_id = $supabaseUserId;
+        }
+
+        $user->email = $email;
+
+        return $user;
     }
 
     private function uniqueUsername(string $baseUsername): string
@@ -253,13 +443,44 @@ class UserController extends Controller
         return $username;
     }
 
-    private function sendWelcomeEmail(User $user): void
+    private function sendManualSignupCode(Request $request, string $email): void
+    {
+        $code = (string) random_int(100000, 999999);
+
+        Mail::to($email)->send(new SignupVerificationCodeMail($code));
+
+        $request->session()->put('pending_signup_email', [
+            'email' => $email,
+            'code_hash' => Hash::make($code),
+            'expires_at' => now()->addMinutes(self::SIGNUP_CODE_TTL_MINUTES),
+            'resend_available_at' => now()->addSeconds(self::SIGNUP_RESEND_COOLDOWN_SECONDS),
+            'verified_at' => null,
+        ]);
+
+        Log::info('Signup verification code sent.', ['email' => $email]);
+    }
+
+    private function sendWelcomeEmail(User $user, string $source): void
     {
         try {
+            Log::info('Sending welcome email.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'source' => $source,
+            ]);
+
             Mail::to($user->email)->send(new WelcomeUserMail($user));
+
+            Log::info('Welcome email sent.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'source' => $source,
+            ]);
         } catch (\Throwable $e) {
             Log::warning('Welcome email failed to send.', [
                 'user_id' => $user->id,
+                'email' => $user->email,
+                'source' => $source,
                 'message' => $e->getMessage(),
             ]);
         }
