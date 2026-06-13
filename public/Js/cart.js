@@ -16,8 +16,16 @@ window.loadCart = async function loadCart() {
   }
 
   cartLoadPromise = (async () => {
+    const cartItemsContainer = document.getElementById('cartItems');
+    if (cartItemsContainer) {
+      cartItemsContainer.innerHTML = `
+        <div class="skeleton-block"></div>
+        <div class="skeleton-block"></div>
+        <div class="skeleton-block"></div>
+      `;
+    }
     try {
-      const response = await fetch('/api/cart');
+      const response = await fetch('/api/cart', { adeOverlay: true, adeMessage: 'Loading cart...' });
       const data = await response.json();
 
       if (data.success) {
@@ -30,6 +38,7 @@ window.loadCart = async function loadCart() {
       }
     } catch (error) {
       console.error('Error loading cart:', error);
+      showCartToast('error', 'Unable to load cart. Please try again.');
     } finally {
       cartLoadPromise = null;
     }
@@ -81,7 +90,7 @@ window.addToCart = async function addToCart(productId, quantity = 1, options = {
     }
   } catch (error) {
     console.error('Error adding to cart:', error);
-    showCartToast('error', 'An error occurred: ' + error.message);
+    showCartToast('error', 'Network connection failed while adding this item. Please try again.');
     return { success: false, message: error.message };
   }
 }
@@ -90,6 +99,8 @@ window.addToCart = async function addToCart(productId, quantity = 1, options = {
  * Update cart item quantity
  */
 window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
+  const item = document.querySelector(`[data-item-id="${cartItemId}"]`);
+  item?.querySelectorAll('button').forEach((button) => { button.disabled = true; });
   try {
     const response = await fetch(`/api/cart/${cartItemId}`, {
       method: 'PUT',
@@ -110,6 +121,8 @@ window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
   } catch (error) {
     console.error('Error updating cart:', error);
     showCartToast('error', 'An error occurred while updating cart');
+  } finally {
+    item?.querySelectorAll('button').forEach((button) => { button.disabled = false; });
   }
 }
 
@@ -117,6 +130,8 @@ window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
  * Remove item from cart
  */
 window.removeFromCart = async function removeFromCart(cartItemId) {
+  const item = document.querySelector(`[data-item-id="${cartItemId}"]`);
+  item?.querySelectorAll('button').forEach((button) => { button.disabled = true; });
   try {
     const response = await fetch(`/api/cart/${cartItemId}`, {
       method: 'DELETE',
@@ -137,6 +152,8 @@ window.removeFromCart = async function removeFromCart(cartItemId) {
   } catch (error) {
     console.error('Error removing from cart:', error);
     showCartToast('error', 'An error occurred while removing item');
+  } finally {
+    item?.querySelectorAll('button').forEach((button) => { button.disabled = false; });
   }
 }
 

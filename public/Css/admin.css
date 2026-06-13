@@ -231,6 +231,19 @@
   border: 2px solid #1ee0ff;
 }
 
+.admin-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff7a1f, #ff1e8e);
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(0,0,0,0.5);
+  box-shadow: 0 0 10px rgba(255, 122, 31, 0.4);
+}
+
 .admin-name {
   font-size: 14px;
   font-weight: 600;

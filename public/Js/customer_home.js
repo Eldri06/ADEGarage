@@ -343,6 +343,8 @@ let currentQuantity = 1;
     window.handleBuyNow = async function handleBuyNow() {
       if (isCartActionPending) return;
       isCartActionPending = true;
+      const buyNowBtn = document.querySelector('.modal-action-btn.buy-now-action');
+      AppLoading?.setButtonLoading?.(buyNowBtn, true, 'Processing...');
 
       const totalPricePerItem = currentProductData.price; 
       const totalCost = totalPricePerItem * currentQuantity;
@@ -380,12 +382,15 @@ let currentQuantity = 1;
         }
       } finally {
         isCartActionPending = false;
+        AppLoading?.setButtonLoading?.(buyNowBtn, false);
       }
     }
 
     window.handleAddToCart = async function handleAddToCart() {
       if (isCartActionPending) return;
       isCartActionPending = true;
+      const addCartBtn = document.querySelector('.modal-action-btn.add-cart-action');
+      AppLoading?.setButtonLoading?.(addCartBtn, true, 'Adding...');
 
       const totalPricePerItem = currentProductData.price; 
       const totalCost = totalPricePerItem * currentQuantity;
@@ -395,6 +400,7 @@ let currentQuantity = 1;
         const result = await addToCart(currentProductData.id, currentQuantity, { reload: false });
         if (!result?.success) {
           isCartActionPending = false;
+          AppLoading?.setButtonLoading?.(addCartBtn, false);
           return;
         }
       } else {
@@ -424,9 +430,18 @@ let currentQuantity = 1;
       
       closeModal();
       isCartActionPending = false;
+      AppLoading?.setButtonLoading?.(addCartBtn, false);
     }
 
-    function showToast(message){
+    function showToast(type, message){
+      if (message === undefined) {
+        message = type;
+        type = 'info';
+      }
+      if (window.AppLoading?.showToast) {
+        window.AppLoading.showToast(type, message);
+        return;
+      }
       const toastRoot = document.getElementById('toastRoot');
       const t = document.createElement('div');
       t.className = 'toast-custom';
@@ -464,6 +479,7 @@ let currentQuantity = 1;
     });
 
     window.showCheckoutPage = async function showCheckoutPage() {
+      AppLoading?.showPageLoader?.('Opening checkout...');
       document.getElementById('shopPage').style.display = 'none';
       document.getElementById('checkoutPage').classList.add('active');
       
@@ -478,12 +494,16 @@ let currentQuantity = 1;
       }
       
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      AppLoading?.hidePageLoader?.();
     }
 
     window.goToStep = async function goToStep(stepNum) {
+      const clickedButton = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+      AppLoading?.setButtonLoading?.(clickedButton, true, 'Loading...');
       if (currentStep === 3 && stepNum > 3) {
         const form = document.getElementById('checkoutForm');
         if (!form.checkValidity()) {
+          AppLoading?.setButtonLoading?.(clickedButton, false);
           form.reportValidity();
           return;
         }
@@ -510,6 +530,7 @@ let currentQuantity = 1;
       }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      AppLoading?.setButtonLoading?.(clickedButton, false);
     }
 
     function updateStepperUI() {
@@ -732,6 +753,7 @@ let currentQuantity = 1;
     }
 
     window.placeOrder = async function placeOrder() {
+      const placeOrderBtn = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
       try {
         const form = document.getElementById('checkoutForm');
         
@@ -740,6 +762,7 @@ let currentQuantity = 1;
           form.reportValidity();
           return;
         }
+        AppLoading?.setButtonLoading?.(placeOrderBtn, true, 'Placing order...');
 
         const orderData = {
           customer_name: form.fullName.value,
@@ -754,6 +777,8 @@ let currentQuantity = 1;
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
         const response = await fetch('/api/orders', {
           method: 'POST',
+          adeOverlay: true,
+          adeMessage: 'Placing order...',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': csrfToken || ''
@@ -775,14 +800,16 @@ let currentQuantity = 1;
           // Go to success page
           goToStep(5);
           
-          showToast('Order placed successfully!');
+          showToast('success', 'Order placed successfully!');
         } else {
-          showToast(data.message || 'Failed to place order');
+          showToast('error', data.message || 'Failed to place order');
           console.error('Order error:', data);
         }
       } catch (error) {
         console.error('Error placing order:', error);
-        showToast('An error occurred while placing order');
+        showToast('error', 'Network connection failed while placing the order. Please try again.');
+      } finally {
+        AppLoading?.setButtonLoading?.(placeOrderBtn, false);
       }
     }
 

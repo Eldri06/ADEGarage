@@ -17,11 +17,14 @@
       <a class="navbar-brand" href="#" onclick="event.preventDefault(); backToShop()">ADE GARAGE</a>
       <div class="nav-right">
         <a class="nav-link" href="#" onclick="event.preventDefault(); backToShop()">SHOP</a>
-        <a class="nav-link d-flex align-items-center" href="#" title="Edit Profile" id="userProfileBtn">
-         <a href="{{ route('profile.show') }}" class="user-link">
-    <i class="fa-solid fa-user"></i>
-    <span id="usernameDisplay">{{ auth()->check() ? auth()->user()->username : 'Guest' }}</span>
-</a>
+        <a href="{{ route('profile.show') }}" class="nav-link d-flex align-items-center user-link" title="Edit Profile" id="userProfileBtn" data-loading-link data-loading-message="Opening profile...">
+          @if(auth()->check() && auth()->user()->profilepicture)
+            <div class="header-avatar" style="width: 24px; height: 24px; border-radius: 50%; background-image: url('{{ auth()->user()->profilepicture }}'); background-size: cover; background-position: center; margin-right: 8px; border: 1px solid #0891b2;"></div>
+          @else
+            <i class="fa-solid fa-user" style="margin-right: 8px;"></i>
+          @endif
+          <span id="usernameDisplay">{{ auth()->check() ? auth()->user()->username : 'Guest' }}</span>
+        </a>
 
   <a class="cart-icon" href="#" id="cartIcon" onclick="event.preventDefault(); showCheckoutPage()">
           <i class="fa-solid fa-shopping-cart"></i>

@@ -29,7 +29,7 @@ class AdminMiddleware
         }
 
         // Ensure authenticated user is an admin
-        if (!Auth::user()->is_admin) {
+        if (!Auth::user()->isAdmin()) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
                     'success' => false,

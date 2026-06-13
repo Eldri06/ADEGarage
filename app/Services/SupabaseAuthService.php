@@ -66,6 +66,13 @@ class SupabaseAuthService
         ]);
     }
 
+    public function sendPasswordResetEmail(string $email): array
+    {
+        return $this->requestJson('POST', '/auth/v1/recover', [
+            'email' => $email,
+        ]);
+    }
+
     public function getOAuthRedirectUrl(
         string $provider,
         string $redirectTo,
@@ -204,6 +211,28 @@ class SupabaseAuthService
         }
 
         return $this->getPublicUrlFromBucket($bucket, $filename);
+    }
+
+    public function uploadProfileImage(\Illuminate\Http\UploadedFile $file): string
+    {
+        $filename  = uniqid('profile_', true) . '.' . $file->getClientOriginalExtension();
+        $bucket    = 'profile-images';
+        return $this->uploadFile($bucket, $file->getRealPath(), $filename);
+    }
+
+    public function deleteProfileImage(string $urlOrFilename): void
+    {
+        $bucket = 'profile-images';
+        $filename = $this->extractBucketObjectPath($urlOrFilename, $bucket);
+
+        $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
+
+        $this->http()
+            ->withHeaders([
+                'apikey'        => $this->serviceRoleKey,
+                'Authorization' => 'Bearer ' . $this->serviceRoleKey,
+            ])
+            ->delete($endpoint);
     }
 
     private function getPublicUrlFromBucket(string $bucket, string $filename): string

@@ -226,10 +226,23 @@ h3,
   height: 150px;
   border-radius: 50%;
   border: 3px solid var(--neon-blue);
-  background: url("https://via.placeholder.com/150") center / cover no-repeat;
+  background: linear-gradient(135deg, var(--neon-orange), var(--neon-pink)) center / cover no-repeat;
   box-shadow: 0 0 15px var(--neon-blue);
   transition: box-shadow 0.3s ease;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.avatar-initials {
+  font-family: "Orbitron", sans-serif;
+  font-size: 42px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0,0,0,0.5);
+  user-select: none;
 }
 
 .avatar:hover {

@@ -7,6 +7,7 @@
   <title>User Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{url('Css/loading.css')}}">
   <link rel="stylesheet" href="{{url('Css/user.css')}}">
 </head>
 <body>
@@ -25,7 +26,7 @@
     <nav>
       <ul>
         <li class="active" data-section="shop">
-          <i class="fas fa-shop"></i><a href="/customer_home">Shop</a> 
+          <i class="fas fa-shop"></i><a href="/customer_home" data-loading-link data-loading-message="Opening shop...">Shop</a> 
         </li>
          <li class="active" data-section="profile">
           <i class="fas fa-user"></i> Profile
@@ -37,7 +38,7 @@
           <i class="fas fa-cog"></i> Settings
         </li>
         <li>
-          <a href="{{route('logout')}}"onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+          <a href="{{route('logout')}}"onclick="event.preventDefault(); AppLoading?.showPageLoader('Logging out...'); document.getElementById('logout-form').submit();">
          <i class="fas fa-sign-out-alt" class="btn-logout" action="/logout" method="POST"></i> Log Out </a>
          <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">@csrf</form>
         </li>
@@ -51,11 +52,15 @@
       <div class="glass profile-card">
         <div class="avatar-container">
           <div class="avatar-wrapper">
-            <div class="avatar" id="avatarImage"></div>
+            <div class="avatar" id="avatarImage" @if(auth()->check() && auth()->user()->profilepicture) style="background-image: url('{{ auth()->user()->profilepicture }}'); background-size: cover; background-position: center;" @endif>
+              @if(!auth()->check() || !auth()->user()->profilepicture)
+                <span class="avatar-initials">{{ strtoupper(substr(auth()->check() ? auth()->user()->username : 'U', 0, 2)) }}</span>
+              @endif
+            </div>
             <button class="avatar-edit-btn" id="avatarEditBtn">
               <i class="fas fa-camera"></i>
             </button>
-            <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+            <input type="file" id="avatarInput" name="profilepicture" form="profileForm" accept="image/*" style="display: none;">
           </div>
         </div>
 
@@ -76,7 +81,7 @@
           </div>
         @endif
 
-        <form class="profile-form" method="POST" action="{{ route('profile.update') }}">
+        <form class="profile-form" id="profileForm" method="POST" action="{{ route('profile.update') }}" enctype="multipart/form-data">
           @csrf
           @method('PUT')
           <div>
@@ -140,9 +145,8 @@
         <button class="tab" data-tab="returned">Returned</button>
         <button class="tab" data-tab="cancelled">Cancelled</button>
       </div>
-      <div class="orders-grid" id="ordersGrid">
-        <p style="text-align: center; color: #a7c0d8; padding: 40px;">Loading your orders...</p>
-      </div>
+      <div class="orders-grid" id="ordersGrid"></div>
+    </section>
     </section>
     <section id="settings" class="section">
       <h2 class="section-title blue">SETTINGS</h2>
@@ -152,7 +156,7 @@
         </h3>
         <div class="setting-item">
           <label>Language</label>
-          <select class="setting-select">
+          <select class="setting-select" id="settingLanguage">
             <option value="en">English</option>
             <option value="es">Spanish</option>
             <option value="fr">French</option>
@@ -161,7 +165,7 @@
         </div>
         <div class="setting-item">
           <label>Region</label>
-          <select class="setting-select">
+          <select class="setting-select" id="settingRegion">
             <option value="us">United States</option>
             <option value="uk">United Kingdom</option>
             <option value="ca">Canada</option>
@@ -176,21 +180,21 @@
         <div class="setting-item">
           <label>Email Notifications</label>
           <label class="toggle-switch">
-            <input type="checkbox" checked>
+            <input type="checkbox" id="settingEmailNotif" checked>
             <span class="slider"></span>
           </label>
         </div>
         <div class="setting-item">
           <label>Push Notifications</label>
           <label class="toggle-switch">
-            <input type="checkbox">
+            <input type="checkbox" id="settingPushNotif">
             <span class="slider"></span>
           </label>
         </div>
         <div class="setting-item">
           <label>SMS Notifications</label>
           <label class="toggle-switch">
-            <input type="checkbox" checked>
+            <input type="checkbox" id="settingSmsNotif" checked>
             <span class="slider"></span>
           </label>
         </div>
@@ -202,13 +206,13 @@
         <div class="setting-item">
           <label>Sound Effects</label>
           <label class="toggle-switch">
-            <input type="checkbox" checked>
+            <input type="checkbox" id="settingSoundEffects" checked>
             <span class="slider"></span>
           </label>
         </div>
         <div class="setting-item">
           <label>Volume Level</label>
-          <input type="range" class="volume-slider" min="0" max="100" value="75">
+          <input type="range" class="volume-slider" id="settingVolume" min="0" max="100" value="75">
         </div>
       </div>
       <div class="glass settings-box">
@@ -218,35 +222,44 @@
         <div class="setting-item">
           <label>Two-Factor Authentication</label>
           <label class="toggle-switch">
-            <input type="checkbox">
+            <input type="checkbox" id="setting2FA">
             <span class="slider"></span>
           </label>
         </div>
         <div class="setting-item">
           <label>Profile Visibility</label>
-          <select class="setting-select">
+          <select class="setting-select" id="settingProfileVisibility">
             <option value="public">Public</option>
             <option value="friends">Friends Only</option>
             <option value="private">Private</option>
           </select>
         </div>
         <div class="setting-item">
-          <button class="btn orange">Change Password</button>
-          <button class="btn blue">Download Data</button>
+          <button class="btn orange" onclick="AppLoading?.showToast?.('info', 'Change Password functionality coming soon.')">Change Password</button>
+          <button class="btn blue" onclick="AppLoading?.showToast?.('info', 'Downloading your data...')">Download Data</button>
         </div>
+      </div>
+      <div class="settings-actions" style="margin-top: 20px; text-align: right; margin-bottom: 40px;">
+        <button class="btn orange" onclick="saveUserSettings()">Save Settings</button>
       </div>
     </section>
 
   </main>
 
+  <div class="toast-container" id="toastRoot"></div>
+  <script src="{{url('Js/loading.js')}}"></script>
   <script src="{{url('Js/user.js')}}"></script>
   <script>
     // Load user's orders from database
     let allOrders = [];
     
     async function loadMyOrders() {
+      const ordersGrid = document.getElementById('ordersGrid');
+      if (ordersGrid) {
+        ordersGrid.innerHTML = AppLoading?.skeletonOrderCards?.(4) || '<p style="text-align: center; color: #a7c0d8; padding: 40px;">Loading your orders...</p>';
+      }
       try {
-        const response = await fetch('/api/my-orders');
+        const response = await fetch('/api/my-orders', { adeOverlay: true, adeMessage: 'Loading orders...' });
         const data = await response.json();
         
         if (data.success) {
@@ -258,6 +271,7 @@
       } catch (error) {
         console.error('Error loading orders:', error);
         document.getElementById('ordersGrid').innerHTML = '<p style="text-align: center; color: #a7c0d8; padding: 40px;">Error loading orders</p>';
+        AppLoading?.showToast?.('error', 'Unable to load your orders. Please try again.');
       }
     }
     
@@ -325,7 +339,7 @@
                 <p class="qty">Qty: ${totalItems}${order.items.length > 1 ? ' (+' + (order.items.length - 1) + ' more)' : ''}</p>
               </div>
             </div>
-            ${buttonText ? `<button class="btn ${buttonClass}" onclick="handleOrderAction(${order.id}, '${order.status}')">${buttonText}</button>` : ''}
+            ${buttonText ? `<button class="btn ${buttonClass}" onclick="handleOrderAction(${order.id}, '${order.status}', this)">${buttonText}</button>` : ''}
           </div>
         `;
       }).join('');
@@ -350,11 +364,12 @@
       }
     }
     
-    async function handleOrderAction(orderId, status) {
+    async function handleOrderAction(orderId, status, button) {
       if (status === 'pending') {
         // Cancel order
         if (confirm('Are you sure you want to cancel this order?')) {
           try {
+            AppLoading?.setButtonLoading?.(button, true, 'Cancelling...');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
             const response = await fetch(`/api/orders/${orderId}/cancel`, {
               method: 'PUT',
@@ -367,27 +382,37 @@
             const data = await response.json();
             
             if (data.success) {
-              alert('Order cancelled successfully!');
+              AppLoading?.showToast?.('success', 'Order cancelled successfully.');
               loadMyOrders(); // Reload orders
             } else {
-              alert('Failed to cancel order: ' + data.message);
+              AppLoading?.showToast?.('error', data.message || 'Failed to cancel order.');
             }
           } catch (error) {
             console.error('Error cancelling order:', error);
-            alert('An error occurred while cancelling the order');
+            AppLoading?.showToast?.('error', 'Unable to cancel the order. Please try again.');
+          } finally {
+            AppLoading?.setButtonLoading?.(button, false);
           }
         }
       } else if (status === 'processing' || status === 'shipped') {
-        alert('Tracking feature coming soon! Order ID: ' + orderId);
+        AppLoading?.showToast?.('info', 'Tracking will be available soon. Order ID: ' + orderId);
       } else if (status === 'delivered') {
-        alert('Buy again feature coming soon! Order ID: ' + orderId);
+        AppLoading?.showToast?.('info', 'Buy again will be available soon. Order ID: ' + orderId);
       } else if (status === 'cancelled') {
-        alert('Reorder feature coming soon! Order ID: ' + orderId);
+        AppLoading?.showToast?.('info', 'Reorder will be available soon. Order ID: ' + orderId);
       }
     }
     
     // Load orders when page loads
-    document.addEventListener('DOMContentLoaded', loadMyOrders);
+    document.addEventListener('DOMContentLoaded', () => {
+      const profileForm = document.getElementById('profileForm');
+      profileForm?.addEventListener('submit', () => {
+        const button = profileForm.querySelector('button[type="submit"]');
+        AppLoading?.setButtonLoading?.(button, true, 'Saving...');
+        AppLoading?.showPageLoader?.('Saving profile...');
+      });
+      loadMyOrders();
+    });
   </script>
 </body>
 </html>

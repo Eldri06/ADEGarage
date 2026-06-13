@@ -77,9 +77,13 @@
           <i class="fas fa-envelope"></i>
           <span class="notification-badge" id="messageCount">5</span>
         </button>
-        <div class="admin-user">
-          <img src="storage/asset/mina.jfif" alt="Admin" class="admin-avatar">
-          <span class="admin-name">Admin</span>
+        <div class="admin-profile">
+          @if(auth()->check() && auth()->user()->profilepicture)
+            <img src="{{ auth()->user()->profilepicture }}" alt="Admin" class="admin-avatar" style="object-fit: cover;">
+          @else
+            <div class="admin-avatar admin-avatar-fallback">{{ strtoupper(substr(auth()->check() ? auth()->user()->username : 'A', 0, 2)) }}</div>
+          @endif
+          <span class="admin-name">{{ auth()->check() ? auth()->user()->username : 'Admin' }}</span>
         </div>
       </div>
     </header>
@@ -106,7 +110,7 @@
             <div class="stat-label">Total Revenue</div>
             <div class="stat-value" id="totalRevenue">₱0</div>
             <div class="stat-change positive" id="revenueChange">
-              <i class="fas fa-arrow-up"></i> Loading...
+              <i class="fas fa-arrow-up"></i>
             </div>
           </div>
         </div>
@@ -119,7 +123,7 @@
             <div class="stat-label">Total Orders</div>
             <div class="stat-value" id="totalOrders">0</div>
             <div class="stat-change positive" id="ordersChange">
-              <i class="fas fa-arrow-up"></i> Loading...
+              <i class="fas fa-arrow-up"></i>
             </div>
           </div>
         </div>
@@ -132,7 +136,7 @@
             <div class="stat-label">Total Customers</div>
             <div class="stat-value" id="totalCustomers">0</div>
             <div class="stat-change positive" id="customersChange">
-              <i class="fas fa-arrow-up"></i> Loading...
+              <i class="fas fa-arrow-up"></i>
             </div>
           </div>
         </div>
@@ -145,7 +149,7 @@
             <div class="stat-label">Products</div>
             <div class="stat-value" id="totalProducts">0</div>
             <div class="stat-change neutral" id="productsChange">
-              <i class="fas fa-minus"></i> Loading...
+              <i class="fas fa-minus"></i>
             </div>
           </div>
         </div>
@@ -886,6 +890,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{{url('Js/loading.js')}}"></script>
   <script src="{{url('Js/admin.js')}}"></script>
 </body>
 </html>

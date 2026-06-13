@@ -26,6 +26,7 @@
       authServerError: document.getElementById('authServerError'),
       signupEmailForm: document.getElementById('signupEmailForm'),
       loginForm: document.getElementById('loginForm'),
+      forgotForm: document.getElementById('forgotForm'),
       signupForm: document.getElementById('signupForm'),
       verifySignupForm: document.getElementById('verifySignupForm'),
       resendCodeBtn: document.getElementById('resendCodeBtn'),
@@ -33,6 +34,7 @@
       verifyCodeMessage: document.getElementById('verifyCodeMessage'),
       loginBtn: document.getElementById('loginBtn'),
       sendSignupCodeBtn: document.getElementById('sendSignupCodeBtn'),
+      forgotBtn: document.getElementById('forgotBtn'),
       signupBtn: document.getElementById('signupBtn'),
       verifySignupBtn: document.getElementById('verifySignupBtn'),
       signupVerifiedEmail: document.getElementById('signupVerifiedEmail'),
@@ -40,30 +42,47 @@
     };
   }
 
-  function setAuthError(message = '') {
+  function setAuthAlert(message = '', type = 'error') {
     const { authServerError } = getElements();
     if (!authServerError) {
       return;
     }
 
     if (message) {
-      authServerError.textContent = message;
-      authServerError.classList.remove('d-none');
+      if (window.AppLoading?.setAlert) {
+        window.AppLoading.setAlert(authServerError, type, message);
+      } else {
+        authServerError.textContent = message;
+        authServerError.className = `alert alert-${type === 'error' ? 'danger' : type}`;
+        authServerError.classList.remove('d-none');
+        authServerError.hidden = false;
+      }
       return;
     }
 
     authServerError.textContent = '';
     authServerError.classList.add('d-none');
+    authServerError.hidden = true;
   }
 
-  function setVerifyMessage(message = '', isError = false) {
+  function setAuthError(message = '') {
+    setAuthAlert(message, 'error');
+  }
+
+  function setVerifyMessage(message = '', type = 'info') {
     const { verifyCodeMessage } = getElements();
     if (!verifyCodeMessage) {
       return;
     }
 
     verifyCodeMessage.textContent = message;
-    verifyCodeMessage.style.color = isError ? 'var(--neon-orange)' : 'var(--neutral-gray)';
+    const colors = {
+      success: 'var(--ade-loader-green, #1eff8e)',
+      error: 'var(--ade-loader-red, #ff1e8e)',
+      warning: 'var(--ade-loader-orange, #ff7a1f)',
+      info: 'var(--neutral-gray)',
+    };
+    verifyCodeMessage.style.color = colors[type] || colors.info;
   }
 
   function activateTab(tabName = 'login') {
@@ -194,6 +213,11 @@
       return;
     }
 
+    if (window.AppLoading?.setButtonLoading) {
+      window.AppLoading.setButtonLoading(button, isLoading, loadingText);
+      return;
+    }
+
     if (!button.dataset.defaultLabel) {
       button.dataset.defaultLabel = button.textContent.trim();
     }
@@ -285,19 +309,11 @@
       return 'Something went wrong. Please try again.';
     }
 
-    if (payload.message) {
-      return payload.message;
-    }
-
-    if (payload.error) {
-      return payload.error;
-    }
-
-    if (payload.errors && typeof payload.errors === 'object') {
-      return Object.values(payload.errors).flat().join(', ');
-    }
-
-    return 'Something went wrong. Please try again.';
+    return window.AppLoading?.friendlyAuthMessage?.(payload)
+      || payload.message
+      || payload.error
+      || (payload.errors && typeof payload.errors === 'object' ? Object.values(payload.errors).flat().join(', ') : '')
+      || 'Something went wrong. Please try again.';
   }
 
   async function submitAuthForm(form, button, tabName, loadingText) {
@@ -310,7 +326,7 @@
       return;
     }
 
-    setAuthError('');
+    setAuthAlert('');
     openAuth(tabName);
     setButtonLoading(button, loadingText, true);
 
@@ -344,8 +360,8 @@
           signupEmailForm.hidden = true;
         }
 
-        setAuthError(payload.message || `Verification code sent to ${payload.email || signupEmail}`);
-        setVerifyMessage(payload.message || 'Check your email for the latest verification code.');
+        setAuthAlert(payload.message || `Verification code sent to ${payload.email || signupEmail}`, 'success');
+        setVerifyMessage(payload.message || 'Check your email for the latest verification code.', 'success');
         activateTab('verify');
         startResendCooldown();
         document.getElementById('verifyCode')?.focus();
@@ -353,21 +369,28 @@
       }
 
       if (response.ok && payload.success && payload.email_verified) {
-        setAuthError(payload.message || 'Verification successful.');
-        setVerifyMessage(payload.message || 'Verification successful.');
+        setAuthAlert(payload.message || 'Verification successful.', 'success');
+        setVerifyMessage(payload.message || 'Verification successful.', 'success');
         unlockSignupDetails(payload.email || document.getElementById('verifyEmail')?.value || '');
         return;
       }
 
+      if (response.ok && payload.success) {
+        setAuthAlert(payload.message || 'Request completed successfully.', 'success');
+        activateTab(tabName);
+        return;
+      }
+
       const message = extractErrorMessage(payload);
-      setAuthError(message);
+      setAuthAlert(message, response.status === 429 ? 'warning' : 'error');
       if (tabName === 'verify') {
-        setVerifyMessage(message, true);
+        const type = /expired/i.test(message) ? 'warning' : 'error';
+        setVerifyMessage(message, type);
       }
       activateTab(tabName);
     } catch (error) {
       console.error('Authentication request failed:', error);
-      setAuthError('Network error. Please try again.');
+      setAuthAlert('Network connection failed. Check your internet and try again.', 'error');
       activateTab(tabName);
     } finally {
       setButtonLoading(button, loadingText, false);
@@ -388,13 +411,19 @@
   }
 
   async function loadFeaturedProducts() {
+    const productsRow = document.querySelector('.products-row');
+    if (productsRow) {
+      productsRow.innerHTML = window.AppLoading?.skeletonCards?.(4, 'product-card position-relative') || '';
+    }
     try {
       const response = await fetch('/api/products');
       const products = await response.json();
       const featuredProducts = products.filter((product) => product.ml_tier === 'Fast-Moving' || product.ml_tier === 'Premium');
-      const productsRow = document.querySelector('.products-row');
 
       if (!productsRow || !featuredProducts.length) {
+        if (productsRow) {
+          productsRow.innerHTML = '<div class="app-alert app-alert-info">No featured products are available right now.</div>';
+        }
         return;
       }
 
@@ -444,11 +473,13 @@
       openForgot,
       backToLogin,
       loginForm,
+      forgotForm,
       signupEmailForm,
       signupForm,
       verifySignupForm,
       resendCodeBtn,
       loginBtn,
+      forgotBtn,
       sendSignupCodeBtn,
       signupBtn,
       verifySignupBtn,
@@ -459,9 +490,44 @@
     wirePwdToggle('loginPwdToggle', 'loginPassword');
     wirePwdToggle('suPwdToggle', 'suPwd');
 
+    document.getElementById('contactForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector('button[type="submit"]');
+      if (!form.reportValidity()) return;
+
+      setButtonLoading(button, 'SENDING...', true);
+      try {
+        const response = await fetch('/api/messages', {
+          method: 'POST',
+          body: new FormData(form),
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.ok && payload.success) {
+          form.reset();
+          window.AppLoading?.showToast?.('success', payload.message || 'Message sent successfully.');
+          return;
+        }
+
+        window.AppLoading?.showToast?.('error', extractErrorMessage(payload));
+      } catch (error) {
+        console.error('Contact message failed:', error);
+        window.AppLoading?.showToast?.('error', 'Network connection failed while sending your message.');
+      } finally {
+        setButtonLoading(button, 'SENDING...', false);
+      }
+    });
+
     if (homeLoginBtn) {
       homeLoginBtn.addEventListener('click', () => {
-        setAuthError('');
+        setAuthAlert('');
         openAuth('login');
       });
     }
@@ -516,6 +582,11 @@
       await submitAuthForm(loginForm, loginBtn, 'login', 'LOGGING IN...');
     });
 
+    forgotForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await submitAuthForm(forgotForm, forgotBtn, 'forgot', 'SENDING...');
+    });
+
     signupEmailForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       await submitAuthForm(signupEmailForm, sendSignupCodeBtn, 'signup', 'SENDING CODE...');
@@ -542,7 +613,7 @@
         return;
       }
 
-      setAuthError('');
+      setAuthAlert('');
       setVerifyMessage('');
       setButtonLoading(resendCodeBtn, 'SENDING...', true);
 
@@ -561,17 +632,19 @@
         const message = extractErrorMessage(payload);
 
         if (response.ok && payload.success) {
-          setVerifyMessage(payload.message || 'We sent a new verification code.');
+          setAuthAlert(payload.message || 'We sent a new verification code.', 'success');
+          setVerifyMessage(payload.message || 'We sent a new verification code.', 'success');
           startResendCooldown();
           document.getElementById('verifyCode')?.focus();
           return;
         }
 
-        setVerifyMessage(message, true);
-        setAuthError(message);
+        setVerifyMessage(message, /expired/i.test(message) ? 'warning' : 'error');
+        setAuthAlert(message, /expired/i.test(message) ? 'warning' : 'error');
       } catch (error) {
         console.error('Resend code request failed:', error);
-        setVerifyMessage('Network error. Please try again.', true);
+        setVerifyMessage('Network connection failed. Check your internet and try again.', 'error');
+        setAuthAlert('Network connection failed. Check your internet and try again.', 'error');
       } finally {
         if (!resendCooldownTimer) {
           setButtonLoading(resendCodeBtn, 'SENDING...', false);

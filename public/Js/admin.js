@@ -121,6 +121,7 @@ let currentSearchQuery = "";
 let currentOrderId = null;
 let currentConversationId = null;
 let currentEditingProductId = null;
+let liveMessages = [];
 let salesChart = null;
 let revenueChart = null;
 let customerChart = null;
@@ -184,7 +185,7 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
   currentAdminSection = sectionName;
 
   if (sectionName === "dashboard") {
-    await loadOrders();
+    loadOrders();
     await Promise.all([loadDashboardData(), loadDashboardStats(), loadNotifications()]);
     return;
   }
@@ -369,6 +370,11 @@ function initializeSidebar() {
 }
 
 async function switchSection(sectionName) {
+  // Show loading overlay while switching sections
+  if (window.AppLoading && typeof window.AppLoading.showPageLoader === "function") {
+    window.AppLoading.showPageLoader?.(`Loading ${sectionName}...`);
+  }
+
   const sections = document.querySelectorAll(".admin-section");
   sections.forEach((section) => section.classList.remove("active"));
 
@@ -376,7 +382,7 @@ async function switchSection(sectionName) {
   if (targetSection) {
     targetSection.classList.add("active");
   }
-  
+
   // Update nav items
   const navItems = document.querySelectorAll(".nav-item");
   navItems.forEach((item) => item.classList.remove("active"));
@@ -387,6 +393,11 @@ async function switchSection(sectionName) {
 
   await refreshAdminSection(sectionName);
   applyAdminSearch();
+
+  // Hide loading overlay after content is ready
+  if (window.AppLoading && typeof window.AppLoading.hidePageLoader === "function") {
+    window.AppLoading.hidePageLoader?.();
+  }
 }
 
 async function loadProductsData() {
@@ -485,7 +496,7 @@ function productMatchesFilterValue(actualValue, filterValue) {
 
   const actual = normalizeAdminValue(actualValue);
   const selected = normalizeAdminValue(filterValue);
-  return actual === selected || actual.includes(selected) || selected.includes(actual);
+  return actual === selected;
 }
 
 function renderProductsData() {
@@ -549,6 +560,10 @@ function renderProductsData() {
 }
 
 async function loadProductsData(force = false) {
+  const productsTable = document.getElementById("productsTable");
+  if (productsTable) {
+    productsTable.innerHTML = window.AppLoading?.skeletonRows?.(9, 6) || '';
+  }
   try {
     await ensureProductsData(force);
     renderProductsData();
@@ -617,6 +632,7 @@ function closeProductModal() {
 }
 
 async function saveProduct() {
+  const saveButton = document.querySelector('#productModal .modal-footer .btn-primary');
   const name = document.getElementById("productName").value;
   const description = document.getElementById("productDescription").value;
   const category = document.getElementById("productCategory").value;
@@ -672,6 +688,7 @@ async function saveProduct() {
   }
 
   try {
+    AppLoading?.setButtonLoading?.(saveButton, true, currentEditingProductId ? 'Updating...' : 'Saving...');
     let url = '/api/products';
     let method = 'POST';
 
@@ -691,9 +708,7 @@ async function saveProduct() {
       body: formData
     });
 
-    console.log('Response status:', response.status);
     const data = await response.json();
-    console.log('Response data:', data);
 
     if (response.ok && data.success) {
       showToast("success", data.message);
@@ -714,7 +729,9 @@ async function saveProduct() {
     }
   } catch (error) {
     console.error('Error saving product:', error);
-    showToast("error", "An error occurred: " + error.message);
+    showToast("error", "Network connection failed while saving the product. Please try again.");
+  } finally {
+    AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
@@ -943,28 +960,55 @@ function initializeMessages() {
   updateMessageCount();
 }
 
-function loadMessages() {
+async function loadMessages() {
   const messageContent = document.getElementById("messageContent");
   if (!messageContent) return;
 
-  messageContent.innerHTML = messages.map(msg => `
+  messageContent.innerHTML = '<div style="padding: 20px; color: #a7c0d8;">Loading messages...</div>';
+
+  try {
+    const response = await fetch('/api/admin/messages', { adeSilent: true });
+    const data = await response.json();
+    liveMessages = data.success && Array.isArray(data.messages) ? data.messages : [];
+  } catch (error) {
+    console.error('Error loading messages:', error);
+    messageContent.innerHTML = '<div style="padding: 20px; color: #ff1e8e;">Unable to load messages</div>';
+    return;
+  }
+
+  updateMessageCount();
+
+  if (!liveMessages.length) {
+    messageContent.innerHTML = '<div style="padding: 20px; color: #a7c0d8;">No messages yet</div>';
+    return;
+  }
+
+  messageContent.innerHTML = liveMessages.map(msg => `
     <div class="message-item ${msg.read ? '' : 'unread'}" onclick="openConversation(${msg.id})">
-      <div class="message-sender">${msg.sender}</div>
-      <div class="message-preview">${msg.preview}</div>
-      <div class="message-time">${msg.time}</div>
+      <div class="message-sender">${escapeAdminHtml(msg.sender_name || 'Customer')}</div>
+      <div class="message-preview">${escapeAdminHtml(msg.body || '')}</div>
+      <div class="message-time">${formatDateTime(msg.created_at)}</div>
     </div>
   `).join('');
 }
 
-function openConversation(id) {
+async function openConversation(id) {
   currentConversationId = id;
-  const message = messages.find(m => m.id === id);
+  const message = liveMessages.find(m => Number(m.id) === Number(id));
   
   if (message) {
     message.read = true;
     updateMessageCount();
+    fetch(`/api/admin/messages/${id}/read`, {
+      method: 'PUT',
+      adeSilent: true,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      }
+    }).catch((error) => console.error('Error marking message read:', error));
     
-    document.getElementById("conversationName").textContent = message.sender;
+    document.getElementById("conversationName").textContent = message.sender_name || 'Customer';
     document.getElementById("messageListView").style.display = 'none';
     document.getElementById("messageConversation").classList.add('active');
     
@@ -972,20 +1016,39 @@ function openConversation(id) {
   }
 }
 
-function loadConversationMessages(id) {
+async function loadConversationMessages(id) {
   const conversationMessages = document.getElementById("conversationMessages");
   if (!conversationMessages) return;
-  
-  const msgs = conversations[id] || [];
-  
-  conversationMessages.innerHTML = msgs.map(msg => `
-    <div class="message-bubble ${msg.type}">
-      ${msg.image ? `<img src="${msg.image}" class="message-image" alt="Sent image">` : ''}
-      ${msg.text}
-      <div class="message-time-stamp">${msg.time}</div>
-    </div>
-  `).join('');
-  
+
+  conversationMessages.innerHTML = '<div style="padding: 20px; color: #a7c0d8;">Loading...</div>';
+
+  try {
+    const response = await fetch(`/api/admin/messages/${id}/thread`, { adeSilent: true });
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.messages)) {
+      conversationMessages.innerHTML = '<div style="padding: 20px; color: #ff1e8e;">Failed to load conversation</div>';
+      return;
+    }
+
+    const msgs = data.messages.map(msg => ({
+      type: msg.sender_id ? "sent" : "received",
+      text: msg.body,
+      time: formatDateTime(msg.created_at)
+    }));
+
+    conversationMessages.innerHTML = msgs.map(msg => `
+      <div class="message-bubble ${msg.type}">
+        ${msg.image ? `<img src="${msg.image}" class="message-image" alt="Sent image">` : ''}
+        ${escapeAdminHtml(msg.text)}
+        <div class="message-time-stamp">${msg.time}</div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Error loading conversation thread:', error);
+    conversationMessages.innerHTML = '<div style="padding: 20px; color: #ff1e8e;">Network error loading conversation</div>';
+  }
+
   conversationMessages.scrollTop = conversationMessages.scrollHeight;
 }
 
@@ -998,30 +1061,37 @@ function backToMessageList() {
   currentConversationId = null;
 }
 
-function sendMessage() {
+async function sendMessage() {
   const input = document.getElementById("messageInput");
   const text = input.value.trim();
   
   if (text && currentConversationId) {
-    if (!conversations[currentConversationId]) {
-      conversations[currentConversationId] = [];
+    try {
+      const response = await fetch(`/api/admin/messages/${currentConversationId}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        showToast("error", data.message || "Failed to send message");
+        return;
+      }
+
+      liveMessages.unshift(data.data);
+      loadConversationMessages(currentConversationId);
+      input.value = '';
+      showToast("success", "Message sent");
+    } catch (error) {
+      console.error('Error sending message:', error);
+      showToast("error", "Network error while sending message");
     }
-    
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    
-    conversations[currentConversationId].push({
-      type: "sent",
-      text: text,
-      time: timeStr
-    });
-    
-    loadConversationMessages(currentConversationId);
-    input.value = '';
-    showToast("success", "Message sent");
   }
 }
-
 function handleMessageKeyPress(event) {
   if (event.key === 'Enter') {
     sendMessage();
@@ -1055,7 +1125,8 @@ function handleImageSelect(event) {
 }
 
 function updateMessageCount() {
-  const unreadCount = messages.filter(m => !m.read).length;
+  const sourceMessages = liveMessages.length ? liveMessages : messages;
+  const unreadCount = sourceMessages.filter(m => !m.read).length;
   const badge = document.getElementById("messageCount");
   if (badge) {
     if (unreadCount > 0) {
@@ -1369,6 +1440,7 @@ async function initializeTierDistChart() {
 async function loadTopProductsMonthly(month) {
   const table = document.getElementById('topProductsTable');
   if (!table) return;
+  table.innerHTML = window.AppLoading?.skeletonRows?.(7, 5) || '';
 
   try {
     let url = '/api/admin/analytics/top-products-monthly';
@@ -1412,6 +1484,8 @@ async function loadTopProductsMonthly(month) {
     applyAdminSearchToSection("analytics");
   } catch (e) {
     console.error('Error loading top products:', e);
+    table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#ff1e8e;">Unable to load top products</td></tr>';
+    showToast("error", "Failed to load top products");
   }
 }
 
@@ -1419,6 +1493,7 @@ async function loadTopProductsMonthly(month) {
 async function loadDeadStock() {
   const table = document.getElementById('deadStockTable');
   if (!table) return;
+  table.innerHTML = window.AppLoading?.skeletonRows?.(7, 4) || '';
 
   try {
     const res = await fetch('/api/admin/analytics/dead-stock');
@@ -1451,6 +1526,8 @@ async function loadDeadStock() {
     applyAdminSearchToSection("analytics");
   } catch (e) {
     console.error('Error loading dead stock:', e);
+    table.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#ff1e8e;">Unable to load dead stock data</td></tr>';
+    showToast("error", "Failed to load dead stock data");
   }
 }
 
@@ -1754,6 +1831,7 @@ function exportOrders() {
 async function loadDashboardData() {
   const recentOrdersTable = document.getElementById("recentOrdersTable");
   if (!recentOrdersTable) return;
+  recentOrdersTable.innerHTML = window.AppLoading?.skeletonRows?.(6, 5) || '';
 
   // Load orders from database if not already loaded
   if (realOrdersData.length === 0) {
@@ -1789,6 +1867,11 @@ async function loadDashboardData() {
 function loadInventoryData() {
   const inventoryTable = document.getElementById("inventoryTable");
   if (!inventoryTable) return;
+
+  if (!productsData.length) {
+    inventoryTable.innerHTML = window.AppLoading?.skeletonRows?.(6, 5) || '';
+    return;
+  }
 
   inventoryTable.innerHTML = productsData.map(product => {
     const minRequired = 20;
@@ -1830,50 +1913,244 @@ async function loadAnalyticsData() {
   ]);
 }
 
-
-function saveStoreInfo(event) {
+async function saveStoreInfo(event) {
   event.preventDefault();
   const storeName = document.getElementById("storeName").value;
   const storeEmail = document.getElementById("storeEmail").value;
   const storePhone = document.getElementById("storePhone").value;
   const storeAddress = document.getElementById("storeAddress").value;
-  const storeLocation = document.getElementById("storeLocation").value; 
+  const storeLocation = document.getElementById("storeLocation").value;
 
   if (!storeName || !storeEmail || !storePhone || !storeAddress || !storeLocation) {
     showToast("error", "Please fill in all store information fields");
     return;
   }
 
+  try {
+    const response = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({ store_info: { storeName, storeEmail, storePhone, storeAddress, storeLocation } })
+    });
 
-  console.log("Store Info Saved:", { storeName, storeEmail, storePhone, storeAddress, storeLocation });
-  showToast("success", "Store information updated successfully!");
+    const data = await response.json();
+    if (data.success) {
+      localStorage.setItem('adeAdminStoreInfo', JSON.stringify({ storeName, storeEmail, storePhone, storeAddress, storeLocation }));
+      showToast("success", "Store information updated successfully!");
+    } else {
+      showToast("error", data.message || "Failed to save store information");
+    }
+  } catch (error) {
+    console.error('Error saving store info:', error);
+    showToast("error", "Network error while saving store information");
+  }
 }
 
-function saveNotificationSettings(event) {
+async function saveNotificationSettings(event) {
   event.preventDefault();
-  showToast("success", "Notification settings updated successfully!");
+  const settings = {
+    emailNotif: document.getElementById("emailNotif")?.checked ?? true,
+    orderNotif: document.getElementById("orderNotif")?.checked ?? true,
+    stockNotif: document.getElementById("stockNotif")?.checked ?? true,
+    customerNotif: document.getElementById("customerNotif")?.checked ?? false
+  };
+
+  try {
+    const response = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({ notification_settings: settings })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      localStorage.setItem('adeAdminNotifSettings', JSON.stringify(settings));
+      showToast("success", "Notification settings updated successfully!");
+    } else {
+      showToast("error", data.message || "Failed to save notification settings");
+    }
+  } catch (error) {
+    console.error('Error saving notification settings:', error);
+    showToast("error", "Network error while saving notification settings");
+  }
 }
 
-function saveBusinessHours(event) {
+async function saveBusinessHours(event) {
   event.preventDefault();
-  showToast("success", "Business hours updated successfully!");
+  const settings = {
+    openingTime: document.getElementById("openingTime")?.value || "09:00",
+    closingTime: document.getElementById("closingTime")?.value || "18:00",
+    weekendOpen: document.getElementById("weekendOpen")?.checked ?? true
+  };
+
+  try {
+    const response = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({ business_hours: settings })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      localStorage.setItem('adeAdminBusinessHours', JSON.stringify(settings));
+      showToast("success", "Business hours updated successfully!");
+    } else {
+      showToast("error", data.message || "Failed to save business hours");
+    }
+  } catch (error) {
+    console.error('Error saving business hours:', error);
+    showToast("error", "Network error while saving business hours");
+  }
 }
 
-function changePassword(event) {
+async function changePassword(event) {
   event.preventDefault();
-  showToast("success", "Password changed successfully!");
+  const current = document.getElementById('currentPassword')?.value;
+  const newPass = document.getElementById('newPassword')?.value;
+  const confirmPass = document.getElementById('confirmPassword')?.value;
+  if (!current || !newPass || !confirmPass) {
+    showToast("error", "Please fill in all password fields.");
+    return;
+  }
+  if (newPass !== confirmPass) {
+    showToast("error", "New passwords do not match.");
+    return;
+  }
+
+  try {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/profile/password';
+    form.style.display = 'none';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.name = '_token';
+    csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    form.appendChild(csrfInput);
+
+    const methodInput = document.createElement('input');
+    methodInput.name = '_method';
+    methodInput.value = 'PUT';
+    form.appendChild(methodInput);
+
+    const currentInput = document.createElement('input');
+    currentInput.name = 'current_password';
+    currentInput.value = current;
+    form.appendChild(currentInput);
+
+    const newInput = document.createElement('input');
+    newInput.name = 'password';
+    newInput.value = newPass;
+    form.appendChild(newInput);
+
+    const confirmInput = document.createElement('input');
+    confirmInput.name = 'password_confirmation';
+    confirmInput.value = confirmPass;
+    form.appendChild(confirmInput);
+
+    document.body.appendChild(form);
+    form.submit();
+  } catch (error) {
+    console.error('Error changing password:', error);
+    showToast("error", "Failed to change password");
+  }
 }
+
+async function loadAdminSettings() {
+  try {
+    const response = await fetch('/api/admin/settings', { adeSilent: true });
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    if (data.store_info) {
+      const info = data.store_info;
+      if (document.getElementById("storeName")) document.getElementById("storeName").value = info.storeName || "";
+      if (document.getElementById("storeEmail")) document.getElementById("storeEmail").value = info.storeEmail || "";
+      if (document.getElementById("storePhone")) document.getElementById("storePhone").value = info.storePhone || "";
+      if (document.getElementById("storeAddress")) document.getElementById("storeAddress").value = info.storeAddress || "";
+      if (document.getElementById("storeLocation")) document.getElementById("storeLocation").value = info.storeLocation || "";
+      localStorage.setItem('adeAdminStoreInfo', JSON.stringify(info));
+    }
+
+    if (data.notification_settings) {
+      const notif = data.notification_settings;
+      if (document.getElementById("emailNotif")) document.getElementById("emailNotif").checked = notif.emailNotif ?? true;
+      if (document.getElementById("orderNotif")) document.getElementById("orderNotif").checked = notif.orderNotif ?? true;
+      if (document.getElementById("stockNotif")) document.getElementById("stockNotif").checked = notif.stockNotif ?? true;
+      if (document.getElementById("customerNotif")) document.getElementById("customerNotif").checked = notif.customerNotif ?? false;
+      localStorage.setItem('adeAdminNotifSettings', JSON.stringify(notif));
+    }
+
+    if (data.business_hours) {
+      const biz = data.business_hours;
+      if (document.getElementById("openingTime")) document.getElementById("openingTime").value = biz.openingTime || "09:00";
+      if (document.getElementById("closingTime")) document.getElementById("closingTime").value = biz.closingTime || "18:00";
+      if (document.getElementById("weekendOpen")) document.getElementById("weekendOpen").checked = biz.weekendOpen ?? true;
+      localStorage.setItem('adeAdminBusinessHours', JSON.stringify(biz));
+    }
+  } catch(e) {
+    console.error("Error loading admin settings from server, using localStorage:", e);
+    try {
+      const storeInfo = localStorage.getItem('adeAdminStoreInfo');
+      if (storeInfo) {
+        const data = JSON.parse(storeInfo);
+        if (document.getElementById("storeName")) document.getElementById("storeName").value = data.storeName || "";
+        if (document.getElementById("storeEmail")) document.getElementById("storeEmail").value = data.storeEmail || "";
+        if (document.getElementById("storePhone")) document.getElementById("storePhone").value = data.storePhone || "";
+        if (document.getElementById("storeAddress")) document.getElementById("storeAddress").value = data.storeAddress || "";
+        if (document.getElementById("storeLocation")) document.getElementById("storeLocation").value = data.storeLocation || "";
+      }
+
+      const notifInfo = localStorage.getItem('adeAdminNotifSettings');
+      if (notifInfo) {
+        const data = JSON.parse(notifInfo);
+        if (document.getElementById("emailNotif")) document.getElementById("emailNotif").checked = data.emailNotif;
+        if (document.getElementById("orderNotif")) document.getElementById("orderNotif").checked = data.orderNotif;
+        if (document.getElementById("stockNotif")) document.getElementById("stockNotif").checked = data.stockNotif;
+        if (document.getElementById("customerNotif")) document.getElementById("customerNotif").checked = data.customerNotif;
+      }
+
+      const bizInfo = localStorage.getItem('adeAdminBusinessHours');
+      if (bizInfo) {
+        const data = JSON.parse(bizInfo);
+        if (document.getElementById("openingTime")) document.getElementById("openingTime").value = data.openingTime;
+        if (document.getElementById("closingTime")) document.getElementById("closingTime").value = data.closingTime;
+        if (document.getElementById("weekendOpen")) document.getElementById("weekendOpen").checked = data.weekendOpen;
+      }
+    } catch(le) {
+      console.error("Error loading admin settings from localStorage:", le);
+    }
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadAdminSettings);
 
 async function refreshDashboard() {
+  const button = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+  AppLoading?.setButtonLoading?.(button, true, 'Refreshing...');
   await loadOrders(true);
   await Promise.all([loadDashboardData(), loadDashboardStats(), loadNotifications()]);
   showToast("success", "Dashboard refreshed!");
+  AppLoading?.setButtonLoading?.(button, false);
 }
 
 async function updateInventory() {
+  const button = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+  AppLoading?.setButtonLoading?.(button, true, 'Updating...');
   await loadProductsData(true);
   loadInventoryData();
   showToast("success", "Inventory updated!");
+  AppLoading?.setButtonLoading?.(button, false);
 }
 
 function generateReport() {
@@ -2200,12 +2477,16 @@ async function exportAnalytics() {
 
 function logout() {
   if (confirm("Are you sure you want to logout?")) {
-    window.location.href = "/home_landing";
+    AppLoading?.navigateWithLoading?.("/home_landing", "Logging out...");
   }
 }
 
 
 function showToast(type, message) {
+  if (window.AppLoading?.showToast) {
+    window.AppLoading.showToast(type, message);
+    return;
+  }
   const toastContainer = document.getElementById("toastRoot");
   if (!toastContainer) return;
 
@@ -2271,6 +2552,7 @@ function closeAddStockModal() {
 }
 
 async function confirmAddStock() {
+  const button = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
   const productId = parseInt(document.getElementById("stockProductId").value);
   const quantityToAdd = parseInt(document.getElementById("stockQuantityToAdd").value);
 
@@ -2287,6 +2569,7 @@ async function confirmAddStock() {
   }
 
   try {
+    AppLoading?.setButtonLoading?.(button, true, 'Adding...');
     const formData = new FormData();
     formData.append('name', product.name);
     formData.append('category', product.category);
@@ -2327,6 +2610,8 @@ async function confirmAddStock() {
   } catch (error) {
     console.error('Error adding stock:', error);
     showToast("error", "Failed to update stock");
+  } finally {
+    AppLoading?.setButtonLoading?.(button, false);
   }
 }
 
@@ -2414,13 +2699,22 @@ function getFilteredLiveOrders() {
  * Load orders from database
  */
 async function loadOrders(force = false) {
+  const ordersGrid = document.getElementById('ordersGrid');
+  const ordersTableBody = document.getElementById('ordersTableBody');
   try {
     if (!force && realOrdersData.length > 0 && Date.now() - ordersLoadedAt < ADMIN_CACHE_TTL) {
       displayOrdersInTable();
       return;
     }
 
-    const response = await fetch('/api/orders');
+    if (ordersGrid) {
+      ordersGrid.innerHTML = window.AppLoading?.skeletonOrderCards?.(4) || '';
+    }
+    if (ordersTableBody) {
+      ordersTableBody.innerHTML = window.AppLoading?.skeletonRows?.(8, 5) || '';
+    }
+
+    const response = await fetch('/api/orders', { adeSilent: true });
     const data = await response.json();
     
     if (data.success) {
@@ -2429,9 +2723,11 @@ async function loadOrders(force = false) {
       displayOrdersInTable();
     } else {
       console.error('Orders API returned success: false');
+      showToast("error", "Failed to load orders");
     }
   } catch (error) {
     console.error('Error loading orders:', error);
+    showToast("error", "Network connection failed while loading orders");
   }
 }
 
@@ -2647,10 +2943,7 @@ async function submitOrderStatusUpdate(event) {
     return;
   }
 
-  if (saveButton) {
-    saveButton.disabled = true;
-    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-  }
+  AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
 
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -2680,10 +2973,7 @@ async function submitOrderStatusUpdate(event) {
     console.error('Error updating order status:', error);
     showToast("error", "An error occurred while updating order status");
   } finally {
-    if (saveButton) {
-      saveButton.disabled = false;
-      saveButton.innerHTML = "Save Status";
-    }
+    AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
@@ -2991,37 +3281,35 @@ document.addEventListener('DOMContentLoaded', () => {
 // Function to trigger Laravel backend Artisan command securely
 async function syncMLData() {
   const btn = document.getElementById('btnSyncMl');
-  const icon = btn.querySelector('i');
-  
-  if (btn.disabled) return;
-  
-  btn.disabled = true;
-  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Syncing...`;
-  
+  if (!btn || btn.disabled) return;
+
+  AppLoading?.setButtonLoading?.(btn, true, 'Syncing...');
+
   try {
     const response = await fetch('/api/admin/ml/sync', {
       method: 'POST',
+      adeOverlay: true,
+      adeMessage: 'Refreshing smart suggestions...',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
       }
     });
-    
+
     const data = await response.json();
-    
+
     if (response.ok && data.success) {
-      alert("✅ Smart Analytics updated successfully!");
-      // reload the charts
+      showToast('success', 'Smart analytics updated successfully.');
       loadDashboardData();
     } else {
-      alert("❌ " + (data.message || "Failed to trigger the Sync protocol."));
+      showToast('error', data.message || 'Failed to refresh smart suggestions.');
       console.error(data.output);
     }
   } catch (err) {
-    console.error("Critical failure attempting to trigger the Sync handler:", err);
-    alert("❌ Error: Unhandled network disconnect while triggering the task.");
+    console.error('Critical failure attempting to trigger the Sync handler:', err);
+    showToast('error', 'Network connection failed while refreshing smart suggestions.');
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<i class="fas fa-sync"></i> Refresh Smart Suggestions`;
+    AppLoading?.setButtonLoading?.(btn, false);
   }
 }
+

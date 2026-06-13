@@ -261,3 +261,105 @@ if (avatarImage) {
     avatarInput.click()
   })
 }
+
+// User Settings Functionality
+async function saveUserSettings() {
+  const settings = {
+    language: document.getElementById('settingLanguage')?.value || 'en',
+    region: document.getElementById('settingRegion')?.value || 'us',
+    emailNotif: document.getElementById('settingEmailNotif')?.checked ?? true,
+    pushNotif: document.getElementById('settingPushNotif')?.checked ?? false,
+    smsNotif: document.getElementById('settingSmsNotif')?.checked ?? true,
+    soundEffects: document.getElementById('settingSoundEffects')?.checked ?? true,
+    volume: document.getElementById('settingVolume')?.value || '75',
+    twoFA: document.getElementById('setting2FA')?.checked ?? false,
+    profileVisibility: document.getElementById('settingProfileVisibility')?.value || 'public'
+  };
+
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    const response = await fetch('/api/user/settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken || ''
+      },
+      body: JSON.stringify(settings)
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      localStorage.setItem('adeUserSettings', JSON.stringify(settings));
+      if (window.AppLoading && window.AppLoading.showToast) {
+        window.AppLoading.showToast('success', 'Settings saved successfully!');
+      } else {
+        alert('Settings saved successfully!');
+      }
+    } else {
+      if (window.AppLoading && window.AppLoading.showToast) {
+        window.AppLoading.showToast('error', data.message || 'Failed to save settings');
+      } else {
+        alert(data.message || 'Failed to save settings');
+      }
+    }
+  } catch (error) {
+    console.error('Error saving user settings:', error);
+    if (window.AppLoading && window.AppLoading.showToast) {
+      window.AppLoading.showToast('error', 'Network error while saving settings');
+    } else {
+      alert('Network error while saving settings');
+    }
+  }
+}
+
+async function loadUserSettings() {
+  try {
+    const response = await fetch('/api/user/settings', { adeSilent: true });
+    if (response.ok) {
+      const settings = await response.json();
+
+      const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      const setCheck = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+
+      setVal('settingLanguage', settings.language || 'en');
+      setVal('settingRegion', settings.region || 'us');
+      setCheck('settingEmailNotif', settings.emailNotif ?? true);
+      setCheck('settingPushNotif', settings.pushNotif ?? false);
+      setCheck('settingSmsNotif', settings.smsNotif ?? true);
+      setCheck('settingSoundEffects', settings.soundEffects ?? true);
+      setVal('settingVolume', settings.volume || '75');
+      setCheck('setting2FA', settings.twoFA ?? false);
+      setVal('settingProfileVisibility', settings.profileVisibility || 'public');
+
+      localStorage.setItem('adeUserSettings', JSON.stringify(settings));
+      return;
+    }
+  } catch(e) {
+    console.error("Error loading user settings from server:", e);
+  }
+
+  try {
+    const saved = localStorage.getItem('adeUserSettings');
+    if (saved) {
+      const settings = JSON.parse(saved);
+
+      const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      const setCheck = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+
+      setVal('settingLanguage', settings.language);
+      setVal('settingRegion', settings.region);
+      setCheck('settingEmailNotif', settings.emailNotif);
+      setCheck('settingPushNotif', settings.pushNotif);
+      setCheck('settingSmsNotif', settings.smsNotif);
+      setCheck('settingSoundEffects', settings.soundEffects);
+      setVal('settingVolume', settings.volume);
+      setCheck('setting2FA', settings.twoFA);
+      setVal('settingProfileVisibility', settings.profileVisibility);
+    }
+  } catch(e) {
+    console.error("Error loading settings:", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadUserSettings);

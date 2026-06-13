@@ -232,6 +232,32 @@ class UserController extends Controller
         }
     }
 
+    public function forgotPassword(Request $request, SupabaseAuthService $supabase)
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        try {
+            $supabase->sendPasswordResetEmail(strtolower($request->email));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset email sent. Check your inbox for the reset link.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Password reset email failed.', [
+                'email' => strtolower($request->email),
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'We could not send the reset email. Please check the email and try again.',
+            ], 422);
+        }
+    }
+
     public function login(Request $request, SupabaseAuthService $supabase)
     {
         $request->validate([

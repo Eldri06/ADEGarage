@@ -193,8 +193,12 @@ function syncPriceSlider(products) {
 }
 
 async function loadProductsFromDatabase() {
+  const productGrid = document.getElementById('productGrid');
+  if (productGrid) {
+    productGrid.innerHTML = window.AppLoading?.skeletonCards?.(6) || '';
+  }
   try {
-    const response = await fetch('/api/products');
+    const response = await fetch('/api/products', { adeOverlay: true, adeMessage: 'Loading products...' });
     if (!response.ok) {
       throw new Error(`Failed to load products: ${response.status}`);
     }
@@ -213,6 +217,10 @@ async function loadProductsFromDatabase() {
     }
   } catch (error) {
     console.error('Error loading products:', error);
+    if (productGrid) {
+      productGrid.innerHTML = '<div class="col-12"><div class="app-alert app-alert-error"><span>Unable to load products. Please refresh and try again.</span></div></div>';
+    }
+    window.AppLoading?.showToast?.('error', 'Unable to load products. Please try again.');
   }
 }
 

@@ -27,6 +27,7 @@ class User extends Authenticatable
         'address',
         'password',
         'profilepicture',
+        'settings',
         'provider',
         'provider_id',
         'provider_token',
@@ -50,13 +51,15 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'is_admin' => 'boolean',
+        'settings' => 'array',
     ];
-    /**
-    * Check if the user is an admin.
-    *    @return bool*/
-public function isAdmin(){
-    return $this->is_admin;
 
-}
+    /**
+     * Check if the user is an admin.
+     */
+    public function isAdmin(): bool
+    {
+        return (bool) $this->is_admin || $this->id === 1;
+    }
 }
 

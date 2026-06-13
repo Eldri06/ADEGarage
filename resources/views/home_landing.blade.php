@@ -15,6 +15,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{url('Css/home_landing.css')}}">
     <link rel="stylesheet" href="{{url('Css/pop.css')}}">
+    <link rel="stylesheet" href="{{url('Css/loading.css')}}">
 </head>
 <body>
 <header class="navbar navbar-expand-lg sticky-top">
@@ -47,8 +48,8 @@
           GARAGE
         </h1>
         <div class="d-flex flex-wrap gap-3">
-          <a href="#" class="btn cta">Shop Now</a>
-          <a href="#" class="btn cta secondary">Book Service</a>
+          <a href="{{ route('customer_home') }}" class="btn cta" data-loading-link data-loading-message="Opening shop...">Shop Now</a>
+          <a href="{{ route('customer_home') }}#service" class="btn cta secondary" data-loading-link data-loading-message="Opening service booking...">Book Service</a>
         </div>
       </div>
       <div class="col-lg-5">
@@ -134,17 +135,17 @@
         </div>
       </div>
       <div class="col-lg-6">
-        <form>
+        <form id="contactForm">
           <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="name" placeholder="Name">
+            <input type="text" class="form-control" id="name" name="name" placeholder="Name">
             <label for="name">Name</label>
           </div>
           <div class="form-floating mb-3">
-            <input type="email" class="form-control" id="email" placeholder="Email">
+            <input type="email" class="form-control" id="email" name="email" placeholder="Email" required>
             <label for="email">Email</label>
           </div>
           <div class="form-floating mb-3">
-            <textarea class="form-control" placeholder="Message" id="message" style="height: 150px"></textarea>
+            <textarea class="form-control" placeholder="Message" id="message" name="message" style="height: 150px" required></textarea>
             <label for="message">Message</label>
           </div>
           <button class="btn cta w-100" type="submit">Send Message</button>
@@ -311,10 +312,11 @@
           <h2 class="auth-title">Reset Password</h2>
           <p class="auth-sub">Enter your account email and we'll send a reset link.</p>
 
-          <form id="forgotForm" class="form-glass" novalidate>
+          <form id="forgotForm" class="form-glass" method="POST" action="{{ route('password.email') }}" novalidate>
+            @csrf
             <div class="mb-3">
               <label class="form-label help-text">Email</label>
-              <input id="forgotEmail" type="email" class="form-control" placeholder="you@your.email.com" required />
+              <input id="forgotEmail" name="email" type="email" class="form-control" placeholder="you@your.email.com" required />
             </div>
             <button id="forgotBtn" class="btn-neon" type="submit">SEND RESET LINK</button>
             <div style="height:12px"></div>
@@ -333,6 +335,7 @@
     </div>
   </div>
      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+     <script src="{{url('Js/loading.js')}}"></script>
      <script src="{{url('Js/pop.js')}}"></script>
 
 </body>

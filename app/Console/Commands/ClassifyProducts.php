@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\SalesHistory;
 use App\Models\Product;
+use App\Models\OrderItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -42,10 +43,10 @@ class ClassifyProducts extends Command
             return 1;
         }
 
-        // Aggregate sales data per product
-        $this->info('Aggregating sales data from sales_histories...');
+        // Aggregate sales data per product, including imported history and live site orders.
+        $this->info('Aggregating sales data from sales_histories and recent orders...');
 
-        $products = SalesHistory::select(
+        $historicalProducts = SalesHistory::select(
                 'product',
                 'brand',
                 'part_type',
@@ -56,7 +57,63 @@ class ClassifyProducts extends Command
                 DB::raw('COUNT(DISTINCT date) as unique_days')
             )
             ->groupBy('product', 'brand', 'part_type')
-            ->get();
+            ->get()
+            ->map(fn ($p) => [
+                'product' => $p->product,
+                'brand' => $p->brand,
+                'part_type' => $p->part_type,
+                'avg_price' => (float) $p->avg_price,
+                'avg_profit' => (float) $p->avg_profit,
+                'total_qty' => (int) $p->total_qty,
+                'sale_count' => (int) $p->sale_count,
+                'unique_days' => (int) $p->unique_days,
+            ]);
+
+        $liveProducts = OrderItem::query()
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereNotIn('orders.status', ['cancelled'])
+            ->select(
+                'order_items.product_name as product',
+                'order_items.product_brand as brand',
+                'order_items.product_category as part_type',
+                DB::raw('AVG(order_items.price) as avg_price'),
+                DB::raw('AVG(order_items.subtotal * 0.30) as avg_profit'),
+                DB::raw('SUM(order_items.quantity) as total_qty'),
+                DB::raw('COUNT(*) as sale_count'),
+                DB::raw('COUNT(DISTINCT DATE(orders.created_at)) as unique_days')
+            )
+            ->groupBy('order_items.product_name', 'order_items.product_brand', 'order_items.product_category')
+            ->get()
+            ->map(fn ($p) => [
+                'product' => $p->product,
+                'brand' => $p->brand,
+                'part_type' => $p->part_type,
+                'avg_price' => (float) $p->avg_price,
+                'avg_profit' => (float) $p->avg_profit,
+                'total_qty' => (int) $p->total_qty,
+                'sale_count' => (int) $p->sale_count,
+                'unique_days' => (int) $p->unique_days,
+            ]);
+
+        $products = $historicalProducts
+            ->concat($liveProducts)
+            ->groupBy(fn ($p) => strtolower(trim(($p['product'] ?? '') . '|' . ($p['brand'] ?? '') . '|' . ($p['part_type'] ?? ''))))
+            ->map(function ($items) {
+                $first = $items->first();
+                $totalQty = max(1, (int) $items->sum('total_qty'));
+
+                return (object) [
+                    'product' => $first['product'],
+                    'brand' => $first['brand'],
+                    'part_type' => $first['part_type'],
+                    'avg_price' => $items->sum(fn ($p) => $p['avg_price'] * max(1, $p['total_qty'])) / $totalQty,
+                    'avg_profit' => $items->sum(fn ($p) => $p['avg_profit'] * max(1, $p['total_qty'])) / $totalQty,
+                    'total_qty' => (int) $items->sum('total_qty'),
+                    'sale_count' => (int) $items->sum('sale_count'),
+                    'unique_days' => (int) $items->sum('unique_days'),
+                ];
+            })
+            ->values();
 
         $this->info("Found {$products->count()} unique products.");
 

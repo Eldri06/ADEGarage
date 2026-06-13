@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use App\Services\SupabaseAuthService;
 
 class ProfileController extends Controller
 {
@@ -20,7 +21,7 @@ class ProfileController extends Controller
     /**
      * Update the user's profile information.
      */
-    public function update(Request $request)
+    public function update(Request $request, SupabaseAuthService $supabase)
     {
         $user = Auth::user();
 
@@ -31,16 +32,30 @@ class ProfileController extends Controller
             'last_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
+            'profilepicture' => ['nullable', 'image', 'max:5120'],
         ]);
 
-        $user->update([
+        $updateData = [
             'username' => $request->username,
             'email' => $request->email,
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
             'phone_number' => $request->phone_number,
             'address' => $request->address,
-        ]);
+        ];
+
+        if ($request->hasFile('profilepicture')) {
+            if ($user->profilepicture) {
+                try {
+                    $supabase->deleteProfileImage($user->profilepicture);
+                } catch (\Exception $e) {
+                    // ignore missing file error
+                }
+            }
+            $updateData['profilepicture'] = $supabase->uploadProfileImage($request->file('profilepicture'));
+        }
+
+        $user->update($updateData);
 
         return redirect()->back()->with('success', 'Profile updated successfully!');
     }

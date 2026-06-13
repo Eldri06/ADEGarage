@@ -8,6 +8,9 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SalesAnalyticsController;
+use App\Http\Controllers\AdminSettingsController;
+use App\Http\Controllers\UserSettingsController;
+use App\Http\Controllers\MessageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,6 +26,7 @@ Route::post('/signup/send-code', [UserController::class, 'sendSignupCode'])->nam
 Route::post('/signup', [UserController::class, 'signup']);
 Route::post('/signup/verify', [UserController::class, 'verifySignupCode'])->name('signup.verify');
 Route::post('/signup/resend', [UserController::class, 'resendSignupCode'])->name('signup.resend');
+Route::post('/password/email', [UserController::class, 'forgotPassword'])->name('password.email');
 Route::post('/login',  [UserController::class, 'login']);
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
 Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->whereIn('provider', ['google', 'facebook']);
@@ -38,7 +42,7 @@ Route::get('/customer_home', function () {
 
 Route::get('/user', function () {
     return view('user');
-});
+})->middleware('auth');
 
 Route::get('/admin', function () {
     return view('admin.admin');
@@ -54,6 +58,7 @@ Route::middleware('auth')->group(function () {
 // Product routes (public)
 Route::get('/api/products',      [ProductController::class, 'index'])->name('products.index');
 Route::get('/api/products/{id}', [ProductController::class, 'show'])->name('products.show');
+Route::post('/api/messages',     [MessageController::class, 'store'])->name('messages.store');
 
 // Cart routes (works for both guest and authenticated users)
 Route::get('/api/cart',          [CartController::class, 'index'])->name('cart.index');
@@ -69,8 +74,16 @@ Route::middleware('auth')->group(function () {
     Route::put('/api/orders/{id}/cancel',   [OrderController::class, 'cancelOrder'])->name('orders.cancel');
 });
 
+// Settings routes (authenticated users)
+Route::middleware('auth')->group(function () {
+    Route::get('/api/user/settings',      [UserSettingsController::class, 'index']);
+    Route::put('/api/user/settings',      [UserSettingsController::class, 'update']);
+});
+
 // Admin routes (admin only)
 Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/api/admin/settings',       [AdminSettingsController::class, 'index'])->name('admin.settings.index');
+    Route::put('/api/admin/settings',       [AdminSettingsController::class, 'update'])->name('admin.settings.update');
     Route::get('/api/admin/products',       [ProductController::class, 'adminIndex'])->name('admin.products.index');
     Route::post('/api/products',            [ProductController::class, 'store'])->name('products.store');
     Route::post('/api/products/{id}',       [ProductController::class, 'update'])->name('products.update');
@@ -80,6 +93,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::put('/api/orders/{id}/status',   [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
 
     Route::get('/api/admin/users',          [App\Http\Controllers\UserController::class, 'index'])->name('admin.users');
+    Route::get('/api/admin/messages',       [MessageController::class, 'index'])->name('admin.messages.index');
+    Route::get('/api/admin/messages/{message}/thread', [MessageController::class, 'thread'])->name('admin.messages.thread');
+    Route::put('/api/admin/messages/{message}/read', [MessageController::class, 'markRead'])->name('admin.messages.read');
+    Route::post('/api/admin/messages/{message}/reply', [MessageController::class, 'reply'])->name('admin.messages.reply');
     Route::get('/api/admin/analytics',      [SalesAnalyticsController::class, 'summary'])->name('admin.analytics');
     Route::get('/api/admin/sales-history',  [SalesAnalyticsController::class, 'index'])->name('admin.sales-history');
 
