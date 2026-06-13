@@ -33,7 +33,7 @@
       state.loader.innerHTML = `
         <div class="app-page-loader__panel">
           <span class="app-spinner" aria-hidden="true"></span>
-          <span class="app-page-loader__text"></span>
+          <span class="app-page-loader__text">Loading...</span>
         </div>
       `;
       document.body.appendChild(state.loader);
@@ -63,7 +63,7 @@
     }
   }
 
-  function showPageLoader(message = '') {
+  function showPageLoader(message = 'Loading...') {
     const loader = ensurePageLoader();
     const text = loader.querySelector('.app-page-loader__text');
     if (text) text.textContent = message;
@@ -80,7 +80,7 @@
     setProgress(true);
     clearTimeout(state.pageTimer);
     if (options.overlay) {
-      state.pageTimer = setTimeout(() => showPageLoader(options.message || ''), 180);
+      state.pageTimer = setTimeout(() => showPageLoader(options.message || 'Loading...'), 180);
     }
     return () => endRequest(options);
   }
@@ -104,7 +104,7 @@
     button.setAttribute('aria-busy', String(Boolean(isLoading)));
     button.classList.toggle('is-button-loading', Boolean(isLoading));
     button.innerHTML = isLoading
-      ? `<span class="button-spinner" aria-hidden="true"></span>${label || ''}`
+      ? `<span class="button-spinner" aria-hidden="true"></span>${label || 'Loading...'}`
       : button.dataset.defaultHtml;
   }
 
@@ -170,7 +170,7 @@
     `).join('');
   }
 
-  function navigateWithLoading(url, message = '') {
+  function navigateWithLoading(url, message = 'Loading page...') {
     if (!url || url === '#') return;
     showPageLoader(message);
     setProgress(true);
@@ -221,7 +221,7 @@
     const href = link.getAttribute('href');
     if (!href || href === '#') return;
     event.preventDefault();
-    navigateWithLoading(href, link.dataset.loadingMessage || '');
+    navigateWithLoading(href, link.dataset.loadingMessage || 'Loading page...');
   });
 
   window.AppLoading = {

@@ -229,7 +229,7 @@ if (avatarInput) {
       reader.onload = (event) => {
         console.log("[v0] Image loaded successfully")
 
-        avatarImage.style.backgroundImage = `url(${event.target.result})`
+        avatarImage.style.background = `url(${event.target.result}) center / cover no-repeat`
         avatarImage.style.backgroundSize = "cover"
         avatarImage.style.backgroundPosition = "center"
 

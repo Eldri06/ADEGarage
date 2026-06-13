@@ -129,7 +129,7 @@
 
           <div class="profile-actions">
             <button type="submit" class="btn orange">Save Changes</button>
-            <button type="button" class="btn blue">Cancel</button>
+            <button type="reset" class="btn blue">Cancel</button>
           </div>
         </form>
       </div>
