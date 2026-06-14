@@ -7,8 +7,9 @@
   <title>User Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="{{url('Css/loading.css')}}">
-  <link rel="stylesheet" href="{{url('Css/user.css')}}">
+  <link rel="stylesheet" href="{{url('Css/loading.css')}}?v={{time()}}">
+  <script src="{{url('Js/loading.js')}}?v={{time()}}"></script>
+  <link rel="stylesheet" href="{{url('Css/user.css')}}?v={{time()}}">
 </head>
 <body>
 
@@ -25,13 +26,13 @@
 
     <nav>
       <ul>
-        <li class="active" data-section="shop">
-          <i class="fas fa-shop"></i><a href="/customer_home" data-loading-link data-loading-message="Opening shop...">Shop</a> 
+        <li id="sidebarShopItem">
+          <i class="fas fa-shop"></i><a href="/customer_home" data-loading-link data-loading-message="Opening shop...">Shop</a>
         </li>
-         <li class="active" data-section="profile">
+        <li class="active" data-section="profile">
           <i class="fas fa-user"></i> Profile
         </li>
-        <li data-section="purchases">
+        <li data-section="purchases" id="sidebarPurchasesItem">
           <i class="fas fa-box"></i> My Purchases
         </li>
         <li data-section="settings">
@@ -129,7 +130,7 @@
 
           <div class="profile-actions">
             <button type="submit" class="btn orange">Save Changes</button>
-            <button type="reset" class="btn blue">Cancel</button>
+            <button type="button" class="btn blue" id="cancelProfileBtn">Cancel</button>
           </div>
         </form>
       </div>

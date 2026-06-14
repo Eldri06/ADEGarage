@@ -127,6 +127,8 @@ class ClassifyProducts extends Command
             return [
                 'id'          => $idx,
                 'name'        => $p->product,
+                'brand'       => $p->brand,
+                'part_type'   => $p->part_type,
                 'avg_price'   => round((float)$p->avg_price, 2),
                 'avg_profit'  => round((float)$p->avg_profit, 2),
                 'total_qty'   => (int)$p->total_qty,
@@ -135,19 +137,29 @@ class ClassifyProducts extends Command
             ];
         })->values()->toArray();
 
-        $this->info('Sending batch prediction to ML server...');
+        $this->info('Sending batch prediction requests to ML server...');
 
         try {
-            $response = Http::timeout(30)->post('http://127.0.0.1:5001/predict/tier/batch', [
+            // Predict Tiers (K-Means)
+            $tierResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/tier/batch', [
                 'products' => $batchPayload,
             ]);
 
-            if (!$response->successful()) {
-                $this->error('ML server returned an error: ' . $response->body());
+            // Predict Demand (Linear Regression)
+            $demandResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/demand/batch', [
+                'products' => $batchPayload,
+            ]);
+
+            if (!$tierResponse->successful() || !$demandResponse->successful()) {
+                $this->error('ML server returned an error.');
                 return 1;
             }
 
-            $results = $response->json('results', []);
+            $tierResults = $tierResponse->json('results', []);
+            $demandResults = $demandResponse->json('results', []);
+            
+            // Map demand results by ID for easy lookup
+            $demandMap = collect($demandResults)->pluck('demand_score', 'id');
         } catch (\Exception $e) {
             $this->error('Error communicating with ML server: ' . $e->getMessage());
             return 1;
@@ -157,24 +169,26 @@ class ClassifyProducts extends Command
         $tierCounts = ['Standard' => 0, 'Fast-Moving' => 0, 'Premium' => 0];
         $classifiedData = [];
 
-        $bar = $this->output->createProgressBar(count($results));
+        $bar = $this->output->createProgressBar(count($tierResults));
 
-        foreach ($results as $result) {
+        foreach ($tierResults as $result) {
             $idx  = $result['id'] ?? null;
             $tier = $result['tier'] ?? 'Unknown';
 
             if ($idx !== null && isset($products[$idx])) {
                 $product = $products[$idx];
                 $tierCounts[$tier] = ($tierCounts[$tier] ?? 0) + 1;
+                $demandScore = $demandMap[$idx] ?? 0;
 
                 $classifiedData[] = [
-                    'product'   => $product->product,
-                    'brand'     => $product->brand,
-                    'part_type' => $product->part_type,
-                    'avg_price' => $product->avg_price,
-                    'tier'      => $tier,
-                    'label'     => $result['label'] ?? $tier,
-                    'cluster'   => $result['cluster'] ?? null,
+                    'product'      => $product->product,
+                    'brand'        => $product->brand,
+                    'part_type'    => $product->part_type,
+                    'avg_price'    => $product->avg_price,
+                    'tier'         => $tier,
+                    'label'        => $result['label'] ?? $tier,
+                    'cluster'      => $result['cluster'] ?? null,
+                    'demand_score' => $demandScore,
                 ];
             }
 
@@ -226,6 +240,7 @@ class ClassifyProducts extends Command
                     'price' => $data['avg_price'] ?? 0,
                     'stock' => 50, // Default stock for newly synced products
                     'ml_tier' => $data['tier'],
+                    'demand_score' => $data['demand_score'] ?? 0,
                 ]
             );
 

@@ -188,10 +188,10 @@ class SupabaseAuthService
     /**
      * Upload a file to Supabase Storage in a specific bucket.
      */
-    public function uploadFile(string $bucket, string $filePath, string $filename): string
+    public function uploadFile(string $bucket, string $filePath, string $filename, ?string $mimeType = null): string
     {
         $endpoint = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
-        $mimeType = File::mimeType($filePath);
+        $mimeType = $mimeType ?? File::mimeType($filePath);
 
         $response = $this->http()
             ->withHeaders([
@@ -217,7 +217,7 @@ class SupabaseAuthService
     {
         $filename  = uniqid('profile_', true) . '.' . $file->getClientOriginalExtension();
         $bucket    = 'profile-images';
-        return $this->uploadFile($bucket, $file->getRealPath(), $filename);
+        return $this->uploadFile($bucket, $file->getRealPath(), $filename, $file->getMimeType());
     }
 
     public function deleteProfileImage(string $urlOrFilename): void

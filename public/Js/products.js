@@ -1,6 +1,16 @@
 window.productsData = [];
 const PRODUCT_PLACEHOLDER_IMAGE = '/images/products/placeholder.png';
 
+function hideAppLoader() {
+  const el = document.getElementById('appPageLoader');
+  if (el) {
+    el.classList.add('hidden');
+    setTimeout(() => el.remove(), 380);
+  }
+  // also call AppLoading helper if it exists
+  window.AppLoading?.hidePageLoader?.();
+}
+
 function normalizeValue(value) {
   return String(value ?? '').trim().toLowerCase();
 }
@@ -140,8 +150,12 @@ function renderProductGrid(products) {
             <div><strong>Price:</strong> ₱${Number(product.price || 0).toLocaleString()}</div>
           </div>
           <div class="product-buttons">
-            <button class="btn-buy-now btn btn-outline-light"><i class="fa-solid fa-shopping-bag"></i> Buy Now</button>
-            <button class="btn-add-cart btn"><i class="fa-solid fa-cart-plus"></i> Add</button>
+            <button class="btn-buy-now btn btn-outline-light" onclick="window.clickProductCardAction?.(this, 'buyNow')">
+              <i class="fa-solid fa-shopping-bag"></i> Buy Now
+            </button>
+            <button class="btn-add-cart btn" onclick="window.clickProductCardAction?.(this, 'addToCart')">
+              <i class="fa-solid fa-cart-plus"></i> Add
+            </button>
           </div>
         </div>
       </div>
@@ -198,16 +212,13 @@ async function loadProductsFromDatabase() {
     productGrid.innerHTML = window.AppLoading?.skeletonCards?.(6) || '';
   }
   try {
-    const response = await fetch('/api/products', { adeOverlay: true, adeMessage: 'Loading products...' });
+    const response = await fetch('/api/products', { adeSilent: true });
     if (!response.ok) {
       throw new Error(`Failed to load products: ${response.status}`);
     }
 
     const products = await response.json();
     window.productsData = Array.isArray(products) ? products : [];
-
-    console.log('Loaded products from database:', window.productsData.length);
-
     renderProductGrid(window.productsData);
     populateFilterOptions(window.productsData);
     syncPriceSlider(window.productsData);
@@ -215,12 +226,17 @@ async function loadProductsFromDatabase() {
     if (typeof filterProducts === 'function') {
       filterProducts();
     }
+
+    setTimeout(() => {
+      hideAppLoader();
+    }, 600);
   } catch (error) {
     console.error('Error loading products:', error);
     if (productGrid) {
       productGrid.innerHTML = '<div class="col-12"><div class="app-alert app-alert-error"><span>Unable to load products. Please refresh and try again.</span></div></div>';
     }
     window.AppLoading?.showToast?.('error', 'Unable to load products. Please try again.');
+    hideAppLoader();
   }
 }
 

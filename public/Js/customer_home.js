@@ -109,23 +109,7 @@ let currentQuantity = 1;
         window._searchTimeout = setTimeout(filterProducts, 180);
       });
 
-      // Buy Now / Add to Cart – delegated
-      document.addEventListener('click', function(e) {
-        const buyBtn = e.target.closest('.btn-buy-now');
-        const addBtn = e.target.closest('.btn-add-cart');
-        if (buyBtn) {
-          e.preventDefault();
-          const card = buyBtn.closest('.product-card');
-          const productItem = buyBtn.closest('.product-item');
-          if (typeof openProductModal === 'function') openProductModal(card, productItem, 'buyNow');
-        } else if (addBtn) {
-          e.preventDefault();
-          e.stopPropagation();
-          const card = addBtn.closest('.product-card');
-          const productItem = addBtn.closest('.product-item');
-          if (typeof window.openProductModal === 'function') window.openProductModal(card, productItem, 'addToCart');
-        }
-      });
+      // Buy Now / Add to Cart event delegation is now handled directly by onclick in products.js
 
       // Cart count
       const cartCountSpan = document.getElementById('cartCount');
@@ -178,6 +162,24 @@ let currentQuantity = 1;
       document.getElementById('modalProductImage').src = currentProductData.baseImageUrl;
       document.getElementById('modalProductImage').alt = `${productName} - ${variationString}`;
     }
+
+    // Provide direct loading action for product card buttons
+    window.clickProductCardAction = function clickProductCardAction(btn, mode) {
+      if (typeof event !== 'undefined') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      const card = btn.closest('.product-card');
+      const productItem = btn.closest('.product-item');
+      AppLoading?.setButtonLoading?.(btn, true, mode === 'buyNow' ? 'Opening...' : 'Adding...');
+      
+      setTimeout(() => {
+        if (typeof window.openProductModal === 'function') {
+          window.openProductModal(card, productItem, mode);
+        }
+        AppLoading?.setButtonLoading?.(btn, false);
+      }, 150);
+    };
 
     // Make function globally accessible
     window.openProductModal = function openProductModal(card, productItem, mode = 'both') {

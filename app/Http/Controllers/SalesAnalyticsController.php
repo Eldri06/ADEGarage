@@ -401,7 +401,7 @@ class SalesAnalyticsController extends Controller
     {
         try {
             // Call the artisan command and capture output
-            $exitCode = Artisan::call('ml:classify-products');
+            $exitCode = Artisan::call('ml:classify-products', ['--update' => true]);
             $output = Artisan::output();
 
             if ($exitCode === 0) {

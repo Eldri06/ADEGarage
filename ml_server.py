@@ -16,7 +16,10 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+import requests
+
 def load_pickle(filename):
+    # Existing helper – unchanged
     path = os.path.join(BASE_DIR, filename)
     if not os.path.exists(path):
         print(f"[WARNING] Model file not found: {path}")
@@ -172,6 +175,86 @@ def predict_demand():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route('/predict/demand/batch', methods=['POST'])
+def predict_demand_batch():
+    """
+    Batch predict demand scores for multiple products.
+    """
+    if linreg_model is None:
+        return jsonify({'error': 'Linear Regression model not loaded'}), 503
+
+    data = request.get_json(force=True)
+    products = data.get('products', [])
+
+    if not products:
+        return jsonify({'error': 'No products provided'}), 400
+
+    results = []
+    
+    # Get current month and day of week for default features
+    from datetime import datetime
+    now = datetime.now()
+    curr_month = now.month
+    curr_dow = now.weekday() # 0-6 (Monday-Sunday)
+
+    for product in products:
+        try:
+            # Prepare features
+            feature_values = []
+            if linreg_features is not None:
+                for f in linreg_features:
+                    if f == 'month':
+                        val = float(curr_month)
+                    elif f == 'day_of_week':
+                        val = float(curr_dow)
+                    elif f == 'log_avg_price':
+                        val = np.log1p(float(product.get('avg_price', 0)))
+                    elif f == 'log_avg_profit':
+                        val = np.log1p(float(product.get('avg_profit', 0)))
+                    elif f.startswith('brand_'):
+                        brand = f.replace('brand_', '')
+                        p_brand = str(product.get('brand', '')).strip()
+                        val = 1.0 if p_brand.lower() == brand.lower() else 0.0
+                        # Handle 'Other' brand
+                        if brand == 'Other' and not any(str(product.get('brand', '')).lower() == b.lower() for b in ['Makoto', 'Maxxis', 'Pitsbike', 'Shell', 'Skygo', 'Suzuki', 'TVS', 'Yamaha']):
+                             val = 1.0
+                    elif f.startswith('part_type_'):
+                        ptype = f.replace('part_type_', '')
+                        p_ptype = str(product.get('part_type', '')).strip()
+                        val = 1.0 if p_ptype.lower() == ptype.lower() else 0.0
+                        # Handle 'Other' part type
+                        if ptype == 'Other' and not any(str(product.get('part_type', '')).lower() == t.lower() for t in ['Brake', 'Clutch', 'Cowling', 'Drive Train', 'Electrical', 'Engine', 'Fender', 'Filter', 'Gasket', 'Handlebar', 'Instrument', 'Lighting', 'Panel/Cover', 'Seal', 'Stand', 'Wheel']):
+                            val = 1.0
+                    else:
+                        val = float(product.get(f, 0))
+                    feature_values.append(val)
+            else:
+                feature_values = [
+                    float(product.get('avg_price', 0)),
+                    float(product.get('total_qty', 0)),
+                    float(product.get('avg_profit', 0)),
+                ]
+
+            features = np.array([feature_values])
+            prediction = float(linreg_model.predict(features)[0])
+            
+            # Normalize demand score to 0-100 range roughly
+            demand_score = max(0, min(100, round(prediction * 10, 2)))
+
+            results.append({
+                'id': product.get('id'),
+                'demand_score': demand_score
+            })
+        except Exception as e:
+            results.append({
+                'id': product.get('id'),
+                'error': str(e),
+                'demand_score': 0
+            })
+
+    return jsonify({'results': results})
 
 
 @app.route('/tiers', methods=['GET'])

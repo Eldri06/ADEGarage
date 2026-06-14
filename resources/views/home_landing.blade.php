@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="{{url('Css/loading.css')}}">
 </head>
 <body>
+  <script src="{{url('Js/loading.js')}}"></script>
+  <script>AppLoading.showPageLoader('Loading ADE Garage...');</script>
 <header class="navbar navbar-expand-lg sticky-top">
   <div class="container-fluid px-3">
     <a class="navbar-brand brand fs-3" href="#">ADE</a>

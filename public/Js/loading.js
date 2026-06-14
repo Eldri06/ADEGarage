@@ -224,6 +224,21 @@
     navigateWithLoading(href, link.dataset.loadingMessage || 'Loading page...');
   });
 
+  // Handle cancel button navigation with proper loading state
+  document.addEventListener('click', (event) => {
+    const cancelBtn = event.target.closest('button.btn.blue[type="button"]');
+    if (!cancelBtn) return;
+    const hasLoadingLink = cancelBtn.hasAttribute('data-loading-link');
+    const hasCancelOnclick = cancelBtn.getAttribute('onclick')?.includes('customer_home');
+    if (hasLoadingLink || hasCancelOnclick) {
+      event.preventDefault();
+      AppLoading.showPageLoader('Returning to shop...');
+      setTimeout(() => {
+        window.location.href = cancelBtn.dataset.href || '{{ route('customer_home') }}';
+      }, 150);
+    }
+  });
+
   window.AppLoading = {
     beginRequest,
     endRequest,

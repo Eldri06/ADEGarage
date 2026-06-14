@@ -8,10 +8,32 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{url('Css/customer_home.css')}}"> 
+  <link rel="stylesheet" href="{{url('Css/customer_home.css')}}">
+  <link rel="stylesheet" href="{{url('Css/loading.css')}}">
+  <style>
+    /* guarantee loader is immediately visible before any JS runs */
+    #appPageLoader {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+      background: rgba(7,9,12,0.88);
+      backdrop-filter: blur(6px);
+      transition: opacity 0.35s ease;
+    }
+    #appPageLoader.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
   
 </head>
 <body>
+  <div id="appPageLoader">
+    <div class="app-page-loader__panel">
+      <span class="app-spinner" aria-hidden="true"></span>
+      <span class="app-page-loader__text">Loading products...</span>
+    </div>
+  </div>
   <nav class="navbar-custom">
     <div class="nav-inner container-fluid">
       <a class="navbar-brand" href="#" onclick="event.preventDefault(); backToShop()">ADE GARAGE</a>
@@ -19,7 +41,10 @@
         <a class="nav-link" href="#" onclick="event.preventDefault(); backToShop()">SHOP</a>
         <a href="{{ route('profile.show') }}" class="nav-link d-flex align-items-center user-link" title="Edit Profile" id="userProfileBtn" data-loading-link data-loading-message="Opening profile...">
           @if(auth()->check() && auth()->user()->profilepicture)
-            <div class="header-avatar" style="width: 24px; height: 24px; border-radius: 50%; background-image: url('{{ auth()->user()->profilepicture }}'); background-size: cover; background-position: center; margin-right: 8px; border: 1px solid #0891b2;"></div>
+            <div class="header-avatar-container" style="position: relative; width: 24px; height: 24px; margin-right: 8px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 50%; border: 1px solid #0891b2;">
+              <img src="{{ auth()->user()->profilepicture }}" id="headerAvatar" alt="Avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'; document.getElementById('headerAvatarFallback').style.display='inline-block';">
+              <i class="fa-solid fa-user" id="headerAvatarFallback" style="display: none; font-size: 14px; line-height: 1;"></i>
+            </div>
           @else
             <i class="fa-solid fa-user" style="margin-right: 8px;"></i>
           @endif
@@ -96,6 +121,12 @@
           <div class="product-grid">
             <div class="row g-4" id="productGrid">
               <!-- JS dynamically loads database products here through products.js -->
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
+              <div class="col-lg-4 col-md-6"><div class="skeleton-card"></div></div>
             </div>
             <div class="no-products-message" id="noProductsMessage" style="display: none;">
               No products match the selected filters.
@@ -483,9 +514,10 @@
   <div class="toast-container" id="toastRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{url('Js/cart.js')}}"></script>
-<script src="{{url('Js/products.js')}}"></script>
-<script src="{{url('Js/customer_home.js')}}"></script>
+  <script src="{{url('Js/loading.js')}}?v={{time()}}"></script>
+  <script src="{{url('Js/cart.js')}}?v={{time()}}"></script>
+  <script src="{{url('Js/products.js')}}?v={{time()}}"></script>
+  <script src="{{url('Js/customer_home.js')}}?v={{time()}}"></script>
   <script>
 (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="HVblQv1hHtQJ9bHFEtr0n";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
 </script>
