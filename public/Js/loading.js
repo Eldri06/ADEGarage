@@ -234,7 +234,7 @@
       event.preventDefault();
       AppLoading.showPageLoader('Returning to shop...');
       setTimeout(() => {
-        window.location.href = cancelBtn.dataset.href || '{{ route('customer_home') }}';
+        window.location.href = cancelBtn.dataset.href || '/shop';
       }, 150);
     }
   });
