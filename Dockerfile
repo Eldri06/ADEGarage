@@ -19,7 +19,6 @@ COPY . .
 # Laravel setup
 RUN composer install --no-dev --optimize-autoloader
 RUN npm install && npm run build
-RUN php artisan storage:link || true
 
 # Fix permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache && \
