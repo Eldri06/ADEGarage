@@ -4,6 +4,7 @@
 //
 // PRODUCTS
 let productsData = [];
+let salesAvgData = [];
 //ORDERS
 const ordersData = [
   {
@@ -209,7 +210,8 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
   }
 
   if (sectionName === "analytics") {
-    await Promise.all([loadProductsData(), loadAnalyticsData()]);
+    await Promise.all([loadProductsData(), loadAnalyticsData(), loadSalesAvgData()]);
+    populatePredictDropdowns();
     destroyAnalyticsCharts();
     await initializeCharts();
   }
@@ -568,6 +570,56 @@ async function loadProductsData(force = false) {
   } catch (error) {
     console.error('Error loading products:', error);
     showToast("error", "Failed to load products");
+  }
+}
+
+async function loadSalesAvgData() {
+  try {
+    const resp = await fetch('/api/admin/products/sales-avg');
+    if (!resp.ok) throw new Error('Failed to fetch sales averages');
+    salesAvgData = await resp.json();
+  } catch (error) {
+    console.error('Error loading sales averages:', error);
+    salesAvgData = [];
+  }
+}
+
+let predictDropdownsInitialized = false;
+
+function populatePredictDropdowns() {
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  if (!source.length) return;
+  const brandSet = new Set();
+  const typeSet = new Set();
+  source.forEach(p => {
+    if (p.brand) brandSet.add(p.brand);
+    if (p.category) typeSet.add(p.category);
+  });
+  const brandSel = document.getElementById('pd_brand');
+  const typeSel = document.getElementById('pd_part_type');
+  if (!brandSel || !typeSel) return;
+  const currentBrand = brandSel.value;
+  const currentType = typeSel.value;
+  brandSel.innerHTML = '<option value="">Select Brand</option>' +
+    [...brandSet].sort().map(b => `<option value="${b}">${b}</option>`).join('');
+  typeSel.innerHTML = '<option value="">Select Part Type</option>' +
+    [...typeSet].sort().map(t => `<option value="${t}">${t}</option>`).join('');
+  if (currentBrand) brandSel.value = currentBrand;
+  if (currentType) typeSel.value = currentType;
+  if (!predictDropdownsInitialized) {
+    predictDropdownsInitialized = true;
+    const clearSearch = () => {
+      const input = document.getElementById('productSearchInput');
+      if (input) input.value = '';
+    };
+    ['pd_brand','pd_part_type'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', clearSearch);
+    });
+    ['pd_price','pd_profit'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', clearSearch);
+    });
   }
 }
 
@@ -1160,7 +1212,7 @@ async function initializeCharts() {
     initializePartTypeChart(),
     initializeBrandMarginsChart(),
     initializeTierDistChart(),
-    initializeDemandChart()
+    initializeRevenueForecastChart()
   ]);
 }
 
@@ -1435,12 +1487,12 @@ async function initializeTierDistChart() {
   }
 }
 
-async function initializeDemandChart() {
+async function initializeRevenueForecastChart() {
   const ctx = document.getElementById('demandForecastChart');
   if (!ctx) return;
 
   try {
-    const res = await fetch('/api/admin/analytics/demand');
+    const res = await fetch('/api/admin/analytics/revenue');
     let data = await res.json();
     
     // Safety check just in case endpoint fails or empty
@@ -1455,7 +1507,7 @@ async function initializeDemandChart() {
       data: {
         labels,
         datasets: [{
-          label: 'Estimated Daily Revenue (PHP)',
+          label: 'Top 10 Products by Estimated Revenue Tomorrow',
           data: values,
           backgroundColor: chartColors.teal,
           borderWidth: 0,
@@ -1493,34 +1545,110 @@ async function initializeDemandChart() {
   }
 }
 
-async function handlePredictDemand(event) {
-  event.preventDefault();
-  
-  const form = document.getElementById('predictDemandForm');
-  const btn = form.querySelector('button[type="submit"]');
+function filterPredictProducts(query) {
+  const dropdown = document.getElementById('productSearchDropdown');
+  if (!dropdown) return;
+
+  if (!query || query.length < 1) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  const q = query.toLowerCase();
+  const matches = source.filter(p =>
+    (p.name && p.name.toLowerCase().includes(q)) ||
+    (p.brand && p.brand.toLowerCase().includes(q)) ||
+    (p.category && p.category.toLowerCase().includes(q))
+  ).slice(0, 10);
+
+  if (matches.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  dropdown.innerHTML = matches.map((p, idx) => {
+    const displayPrice = p.avg_price || p.price || 0;
+    const displayProfit = p.avg_profit || 0;
+    return `
+      <div data-index="${idx}" onclick="selectPredictProduct(this)" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid rgba(30, 224, 255, 0.1); color: #e2e8f0; transition: background 0.2s;"
+           onmouseover="this.style.background='rgba(30,224,255,0.1)'" onmouseout="this.style.background='transparent'">
+        <div style="font-weight: 500;">${p.name}</div>
+        <div style="font-size: 12px; color: #94a3b8;">${capitalizeFirst(p.brand || '')} — ${capitalizeFirst(p.category || '')} — ₱${Number(displayPrice).toLocaleString()} | Profit: ₱${Number(displayProfit).toLocaleString()}</div>
+      </div>
+    `;
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function selectPredictProduct(el) {
+  const idx = parseInt(el.dataset.index);
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  const product = source[idx];
+  if (!product) return;
+
+  const input = document.getElementById('productSearchInput');
+  const dropdown = document.getElementById('productSearchDropdown');
+
+  input.value = product.name;
+  dropdown.style.display = 'none';
+
+  document.getElementById('pd_price').value = product.avg_price || product.price || 0;
+  document.getElementById('pd_profit').value = product.avg_profit || (document.getElementById('pd_price').value * 0.5);
+  const brandSel = document.getElementById('pd_brand');
+  const typeSel = document.getElementById('pd_part_type');
+  if (brandSel) brandSel.value = product.brand || '';
+  if (typeSel) typeSel.value = product.category || '';
+}
+
+async function handlePredictRevenue() {
+  const btn = document.querySelector('[onclick="handlePredictRevenue()"]');
   const resultDiv = document.getElementById('demandPredictionResult');
   const scoreVal = document.getElementById('demandScoreValue');
-  
+  const inputsDiv = document.getElementById('predictionInputs');
+
+  const price = document.getElementById('pd_price').value;
+  const profit = document.getElementById('pd_profit').value;
+  const brand = document.getElementById('pd_brand').value;
+  const partType = document.getElementById('pd_part_type').value;
+  const productName = document.getElementById('productSearchInput')?.value || '';
+
+  if (!price || !profit || !brand || !partType) {
+    showToast('error', 'Please select a product or fill in brand, part type, price, and profit');
+    return;
+  }
+
   if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
     window.AppLoading.setButtonLoading(btn, true, 'Predicting...');
-  } else {
+  } else if (btn) {
     btn.disabled = true;
     btn.textContent = 'Predicting...';
   }
-  
-  let now = new Date();
-  
+
+  const monthVal = parseInt(document.getElementById('pd_month').value);
+  const dayOfWeekVal = parseInt(document.getElementById('pd_day_of_week').value);
+
+  const monthNames = ['', 'January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  inputsDiv.innerHTML = `
+    <strong>${productName}</strong><br>
+    ${capitalizeFirst(brand)} — ${capitalizeFirst(partType)}<br>
+    Avg Price: ₱${Number(price).toLocaleString()} &nbsp;|&nbsp; Avg Profit: ₱${Number(profit).toLocaleString()}<br>
+    ${monthNames[monthVal]} — ${dayNames[dayOfWeekVal]}
+  `;
+
   const payload = {
-    avg_price: parseFloat(document.getElementById('pd_price').value),
-    avg_profit: parseFloat(document.getElementById('pd_profit').value),
-    month: now.getMonth() + 1, // 1-12
-    day_of_week: now.getDay() === 0 ? 6 : now.getDay() - 1, // 0=Mon, 6=Sun
-    brand: document.getElementById('pd_brand').value,
-    part_type: document.getElementById('pd_part_type').value
+    avg_price: parseFloat(price),
+    avg_profit: parseFloat(profit),
+    month: monthVal,
+    day_of_week: dayOfWeekVal,
+    brand: brand,
+    part_type: partType
   };
 
   try {
-    const res = await fetch('/api/admin/ml/predict-demand', {
+    const res = await fetch('/api/admin/ml/predict-revenue', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1528,26 +1656,27 @@ async function handlePredictDemand(event) {
       },
       body: JSON.stringify(payload)
     });
-    
+
     const data = await res.json();
-    if (res.ok && data.predicted_daily_revenue_php !== undefined) {
-      let revenueVal = parseFloat(data.predicted_daily_revenue_php);
-      // Format as ₱X,XXX.XX
+    if (res.ok) {
+      let revenueVal = parseFloat(data.predicted_revenue_php || 0);
       scoreVal.textContent = '₱' + revenueVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
       resultDiv.style.display = 'block';
+      showToast('success', 'Revenue prediction complete');
     } else {
-      alert('Error predicting demand: ' + (data.error || 'Unknown error'));
+      showToast('error', data.error || 'Prediction failed');
       resultDiv.style.display = 'none';
     }
   } catch (error) {
     console.error('Prediction error:', error);
-    alert('Failed to reach server. Ensure ML server is running.');
+    showToast('error', 'Failed to connect to prediction server');
+    resultDiv.style.display = 'none';
   } finally {
     if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
       window.AppLoading.setButtonLoading(btn, false);
-    } else {
+    } else if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Predict Demand';
+      btn.textContent = 'Predict Revenue for Tomorrow';
     }
   }
 }

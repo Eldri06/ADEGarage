@@ -16,8 +16,6 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-import requests
-
 def load_pickle(filename):
     # Existing helper – unchanged
     path = os.path.join(BASE_DIR, filename)
@@ -143,13 +141,13 @@ def predict_tier_batch():
     return jsonify({'results': results})
 
 
-@app.route('/predict/demand', methods=['POST'])
-def predict_demand():
+@app.route('/predict/revenue', methods=['POST'])
+def predict_revenue():
     """
     Predict daily revenue using Linear Regression.
 
     Expects JSON body: { "avg_price": 50, "avg_profit": 10, "month": 6, "day_of_week": 1, "brand": "Honda", "part_type": "Brake" }
-    Returns:  { "demand_score": 1250.50 }
+    Returns:  { "predicted_revenue_php": 1250.50 }
     """
     if linreg_model is None:
         return jsonify({'error': 'Linear Regression model not loaded'}), 503
@@ -189,16 +187,16 @@ def predict_demand():
 
         features = np.array([feature_values])
         prediction_log = float(linreg_model.predict(features)[0])
-        predicted_daily_revenue_php = np.expm1(prediction_log)
+        predicted_revenue_php = np.expm1(prediction_log)
 
-        return jsonify({'predicted_daily_revenue_php': round(predicted_daily_revenue_php, 2)})
+        return jsonify({'predicted_revenue_php': round(predicted_revenue_php, 2)})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
 
-@app.route('/predict/demand/batch', methods=['POST'])
-def predict_demand_batch():
+@app.route('/predict/revenue/batch', methods=['POST'])
+def predict_revenue_batch():
     """
     Batch predict demand scores for multiple products.
     """

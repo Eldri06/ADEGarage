@@ -426,7 +426,7 @@ class SalesAnalyticsController extends Controller
             ], 500);
         }
     }
-    public function demandForecast()
+    public function revenueForecast()
     {
         $products = Product::whereNotNull('demand_score')
             ->where('demand_score', '>', 0)
@@ -436,7 +436,7 @@ class SalesAnalyticsController extends Controller
         return response()->json($products);
     }
 
-    public function predictDemand(Request $request)
+    public function predictRevenue(Request $request)
     {
         $request->validate([
             'avg_price'   => 'required|numeric',
@@ -448,25 +448,99 @@ class SalesAnalyticsController extends Controller
         ]);
 
         try {
-            $response = Http::timeout(10)->post('http://127.0.0.1:5001/predict/demand', [
+            $exitCode = Artisan::call('ml:predict-revenue', [
                 'avg_price'   => $request->avg_price,
                 'avg_profit'  => $request->avg_profit,
-                'month'       => $request->month,
-                'day_of_week' => $request->day_of_week,
                 'brand'       => $request->brand,
                 'part_type'   => $request->part_type,
+                'month'       => (int) $request->month,
+                'day_of_week' => (int) $request->day_of_week,
+                '--json'      => true,
             ]);
 
-            if ($response->successful()) {
-                return response()->json($response->json());
+            $output = Artisan::output();
+            $result = json_decode($output, true);
+
+            if ($exitCode === 0 && $result && !isset($result['error'])) {
+                return response()->json($result);
             }
 
-            return response()->json(['error' => 'ML service returned an error'], 502);
+            $errorMsg = $result['error'] ?? 'Prediction failed';
+            return response()->json(['error' => $errorMsg], 502);
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'ML service unavailable. Make sure ml_server.py is running.',
+                'error' => 'Failed to run prediction. Make sure Python is installed.',
                 'detail' => $e->getMessage(),
             ], 503);
         }
+    }
+
+    public function productsWithSalesAvg()
+    {
+        $historical = SalesHistory::select(
+                'product',
+                'brand',
+                'part_type',
+                DB::raw('AVG(price) as avg_price'),
+                DB::raw('AVG(profit) as avg_profit'),
+                DB::raw('SUM(quantity) as total_qty')
+            )
+            ->whereNotNull('product')
+            ->where('product', '!=', '')
+            ->groupBy('product', 'brand', 'part_type')
+            ->get()
+            ->map(fn($p) => [
+                'name'     => $p->product,
+                'brand'    => $p->brand,
+                'category' => $p->part_type,
+                'avg_price'  => round((float) $p->avg_price, 2),
+                'avg_profit' => round((float) $p->avg_profit, 2),
+                'total_qty' => (int) $p->total_qty,
+            ]);
+
+        $live = OrderItem::query()
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereNotIn('orders.status', ['cancelled'])
+            ->select(
+                'order_items.product_name as product',
+                'order_items.product_brand as brand',
+                'order_items.product_category as part_type',
+                DB::raw('AVG(order_items.price) as avg_price'),
+                DB::raw('AVG(order_items.price) * 0.50 as avg_profit'),
+                DB::raw('SUM(order_items.quantity) as total_qty')
+            )
+            ->whereNotNull('order_items.product_name')
+            ->where('order_items.product_name', '!=', '')
+            ->groupBy('order_items.product_name', 'order_items.product_brand', 'order_items.product_category')
+            ->get()
+            ->map(fn($p) => [
+                'name'     => $p->product,
+                'brand'    => $p->brand,
+                'category' => $p->part_type,
+                'avg_price'  => round((float) $p->avg_price, 2),
+                'avg_profit' => round((float) $p->avg_profit, 2),
+                'total_qty' => (int) $p->total_qty,
+            ]);
+
+        $keyed = [];
+        foreach ($historical as $h) {
+            $k = strtolower(trim($h['name'] . '|' . $h['brand'] . '|' . $h['category']));
+            $keyed[$k] = $h;
+        }
+        foreach ($live as $l) {
+            $k = strtolower(trim($l['name'] . '|' . $l['brand'] . '|' . $l['category']));
+            if (isset($keyed[$k])) {
+                $e = &$keyed[$k];
+                $t = $e['total_qty'] + $l['total_qty'];
+                $e['avg_price']  = round((($e['avg_price'] * $e['total_qty']) + ($l['avg_price'] * $l['total_qty'])) / $t, 2);
+                $e['avg_profit'] = round((($e['avg_profit'] * $e['total_qty']) + ($l['avg_profit'] * $l['total_qty'])) / $t, 2);
+                $e['total_qty']  = $t;
+                unset($e);
+            } else {
+                $keyed[$k] = $l;
+            }
+        }
+
+        return response()->json(array_values($keyed));
     }
 }

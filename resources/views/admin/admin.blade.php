@@ -850,7 +850,7 @@
       <div class="charts-row">
         <div class="chart-card">
           <div class="chart-header">
-            <h3>Top 10 Products by Demand Score</h3>
+            <h3 id="demandChartTitle">Top 10 Products by Estimated Revenue Tomorrow</h3>
           </div>
           <div class="chart-placeholder">
             <canvas id="demandForecastChart"></canvas>
@@ -859,19 +859,79 @@
 
         <div class="data-card" style="flex: 1; padding: 20px;">
           <div class="card-header">
-            <h3><i class="fas fa-calculator" style="color: #1eff8e; margin-right: 8px;"></i>Predict Demand Score</h3>
+            <h3><i class="fas fa-calculator" style="color: #1eff8e; margin-right: 8px;"></i>Predict Revenue for Tomorrow</h3>
           </div>
-          <form class="settings-form" id="predictDemandForm" onsubmit="handlePredictDemand(event)">
-            <div class="form-group"><label>Product Name (Optional)</label><input type="text" id="pd_name" class="form-control" placeholder="e.g. Brake Pads"></div>
-            <div class="form-group"><label>Average Price</label><input type="number" id="pd_price" class="form-control" required step="0.01"></div>
-            <div class="form-group"><label>Average Profit</label><input type="number" id="pd_profit" class="form-control" required step="0.01"></div>
-            <div class="form-group"><label>Brand</label><input type="text" id="pd_brand" class="form-control" required placeholder="e.g. Honda"></div>
-            <div class="form-group"><label>Part Type</label><input type="text" id="pd_part_type" class="form-control" required placeholder="e.g. Brake"></div>
-            <button type="submit" class="btn-action btn-primary" style="margin-top: 10px; width: 100%;">Predict Demand</button>
-          </form>
-          <div id="demandPredictionResult" style="margin-top: 20px; padding: 15px; background: rgba(30, 224, 255, 0.1); border: 1px solid rgba(30, 224, 255, 0.3); border-radius: 8px; display: none;">
-            <h4 style="margin:0 0 10px 0; color:#1ee0ff;">Predicted Demand Score</h4>
-            <div style="font-size: 24px; font-weight: bold; color: #fff;" id="demandScoreValue">0.00</div>
+          <div class="settings-form">
+            <div class="form-group">
+              <label>Search Product</label>
+              <div style="position: relative;">
+                <input type="text" class="form-control" id="productSearchInput" placeholder="Type product name..." autocomplete="off" onkeyup="filterPredictProducts(this.value)">
+                <div id="productSearchDropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1a2332; border: 1px solid rgba(30, 224, 255, 0.2); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000;"></div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Brand</label>
+                <select class="form-control" id="pd_brand">
+                  <option value="">Select Brand</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Part Type</label>
+                <select class="form-control" id="pd_part_type">
+                  <option value="">Select Part Type</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Avg Price (₱)</label>
+                <input type="number" class="form-control" id="pd_price" placeholder="0.00" step="0.01">
+              </div>
+              <div class="form-group">
+                <label>Avg Profit (₱)</label>
+                <input type="number" class="form-control" id="pd_profit" placeholder="0.00" step="0.01">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="flex: 1;">
+                <label>Month</label>
+                <select class="form-control" id="pd_month">
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Day of Week</label>
+                <select class="form-control" id="pd_day_of_week">
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                  <option value="0">Sunday</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn-action btn-primary" onclick="handlePredictRevenue()" style="margin-top: 10px; width: 100%;">
+              <i class="fas fa-chart-line"></i> Predict Revenue for Tomorrow
+            </button>
+            <div id="demandPredictionResult" style="margin-top: 20px; padding: 15px; background: rgba(30, 224, 255, 0.1); border: 1px solid rgba(30, 224, 255, 0.3); border-radius: 8px; display: none;">
+              <h4 style="margin:0 0 10px 0; color:#1ee0ff;">Estimated Revenue for Tomorrow</h4>
+              <div id="predictionInputs" style="font-size: 13px; color: #94a3b8; margin-bottom: 12px; line-height: 1.6;"></div>
+              <div style="font-size: 24px; font-weight: bold; color: #fff;" id="demandScoreValue">₱0.00</div>
+            </div>
           </div>
         </div>
       </div>
