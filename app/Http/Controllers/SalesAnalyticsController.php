@@ -517,7 +517,7 @@ class SalesAnalyticsController extends Controller
         $tmpFile = tempnam($tmpDir, 'in_');
         file_put_contents($tmpFile, json_encode($payload));
 
-        $ph = popen(sprintf('python "%s" --json-file "%s" 2>NUL', $scriptPath, $tmpFile), 'r');
+        $ph = popen(sprintf('python3 "%s" --json-file "%s" 2>/dev/null', $scriptPath, $tmpFile), 'r');
         $output = '';
         if ($ph) {
             while (!feof($ph)) {
@@ -557,7 +557,7 @@ class SalesAnalyticsController extends Controller
             return response()->json(['error' => 'Python prediction script not found.'], 500);
         }
 
-        $command = sprintf('python "%s" --metadata 2>NUL', $scriptPath);
+        $command = sprintf('python3 "%s" --metadata 2>/dev/null', $scriptPath);
         $output = shell_exec($command);
         $result = json_decode((string) $output, true);
 
