@@ -4,7 +4,7 @@ RUN a2enmod rewrite
 
 # System deps: zip/unzip for Composer, nodejs for Vite, python3 for ML, supervisor
 RUN apt-get update && apt-get install -y \
-     zip unzip libzip-dev nodejs python3 python3-pip supervisor \
+zip unzip libzip-dev nodejs npm python3 python3-pip supervisor \
     && apt-get clean
 
 # PHP extensions
