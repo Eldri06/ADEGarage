@@ -4,11 +4,11 @@ COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
 
 # System deps
 RUN apt-get update && apt-get install -y \
-zip unzip libzip-dev nodejs npm python3 python3-pip supervisor \
+zip unzip libzip-dev libpq-dev nodejs npm python3 python3-pip supervisor \
     && apt-get clean
 
-# PHP extensions
-RUN docker-php-ext-install pdo_mysql bcmath zip
+# PHP extensions — added pdo_pgsql for Supabase
+RUN docker-php-ext-install pdo_mysql pdo_pgsql bcmath zip
 
 # Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
