@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 
 class PredictRevenue extends Command
 {
@@ -12,57 +13,50 @@ class PredictRevenue extends Command
                             {brand : Brand name}
                             {part_type : Part type / category}
                             {month : Month number (1-12)}
-                            {day_of_week : Day of week (0=Sun, 1=Mon, ...)}
+                            {day_of_week : Day of week (0=Mon, 6=Sun)}
+                            {product_name? : Exact product name / SKU}
                             {--json : Output raw JSON}';
 
-    protected $description = 'Predict daily revenue for a product using the trained ML model';
+    protected $description = 'Predict daily revenue via Flask ML server (RF for exact SKU, else LinReg)';
 
     public function handle()
     {
-        $avgPrice = $this->argument('avg_price');
-        $avgProfit = $this->argument('avg_profit');
-        $brand = $this->argument('brand');
-        $partType = $this->argument('part_type');
-        $month = $this->argument('month');
-        $dayOfWeek = $this->argument('day_of_week');
+        $payload = [
+            'avg_price'   => (float) $this->argument('avg_price'),
+            'avg_profit'  => (float) $this->argument('avg_profit'),
+            'brand'       => $this->argument('brand'),
+            'part_type'   => $this->argument('part_type'),
+            'month'       => (int) $this->argument('month'),
+            'day_of_week' => (int) $this->argument('day_of_week'),
+        ];
 
-        $scriptPath = base_path('ml_predict_revenue.py');
-        if (!file_exists($scriptPath)) {
-            $this->error('Python prediction script not found at: ' . $scriptPath);
+        $productName = $this->argument('product_name');
+        if ($productName) {
+            $payload['product_name'] = $productName;
+        }
+
+        try {
+            $response = Http::timeout(30)->post('http://127.0.0.1:5001/predict/revenue', $payload);
+        } catch (\Exception $e) {
+            $this->error('Cannot connect to ML server at http://127.0.0.1:5001');
+            $this->line('Start it with: python ml_server.py');
+            $this->line('Error: ' . $e->getMessage());
             return 1;
         }
 
-        $command = sprintf(
-            'python "%s" %s %s "%s" "%s" %d %d 2>NUL',
-            $scriptPath,
-            escapeshellarg($avgPrice),
-            escapeshellarg($avgProfit),
-            $brand,
-            $partType,
-            (int) $month,
-            (int) $dayOfWeek
-        );
-
-        $output = shell_exec($command);
-
-        if ($output === null) {
-            $this->error('Failed to execute Python script. Make sure Python is installed.');
+        if (!$response->successful()) {
+            $this->error('ML server error: ' . ($response->json('error') ?? 'Unknown'));
             return 1;
         }
 
-        $result = json_decode($output, true);
-
-        if (!$result || isset($result['error'])) {
-            $this->error($result['error'] ?? 'Invalid response from prediction script');
-            $this->line($output);
-            return 1;
-        }
+        $result = $response->json();
 
         if ($this->option('json')) {
-            $this->line($output);
+            $this->line(json_encode($result));
         } else {
             $revenue = $result['predicted_revenue_php'] ?? 0;
-            $this->info('Predicted Revenue: ₱' . number_format($revenue, 2));
+            $model = $result['model_used'] ?? 'unknown';
+            $this->info("Predicted Revenue: ₱" . number_format($revenue, 2) . " (model: {$model})");
         }
 
         return 0;

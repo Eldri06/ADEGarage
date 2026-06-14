@@ -5,6 +5,8 @@
 // PRODUCTS
 let productsData = [];
 let salesAvgData = [];
+let revenueModelMetadata = null;
+
 //ORDERS
 const ordersData = [
   {
@@ -126,7 +128,11 @@ let liveMessages = [];
 let salesChart = null;
 let revenueChart = null;
 let customerChart = null;
-let demandChart = null;
+let partTypeChart = null;
+let brandMarginsChart = null;
+let tierDistChart = null;
+let revenueByBrandChart = null;
+let revenueByPartTypeChart = null;
 let nextProductId = 9; 
 let currentAdminSection = "dashboard";
 let dashboardSummaryData = {};
@@ -171,7 +177,7 @@ function setProductImagePreview(imageUrl = "") {
 }
 
 function destroyAnalyticsCharts() {
-  [revenueChart, partTypeChart, brandMarginsChart, tierDistChart, demandChart].forEach((chartInstance) => {
+  [revenueChart, partTypeChart, brandMarginsChart, tierDistChart, revenueByBrandChart, revenueByPartTypeChart].forEach((chartInstance) => {
     if (chartInstance && typeof chartInstance.destroy === "function") {
       chartInstance.destroy();
     }
@@ -181,7 +187,8 @@ function destroyAnalyticsCharts() {
   partTypeChart = null;
   brandMarginsChart = null;
   tierDistChart = null;
-  demandChart = null;
+  revenueByBrandChart = null;
+  revenueByPartTypeChart = null;
 }
 
 async function refreshAdminSection(sectionName = getActiveAdminSection()) {
@@ -210,8 +217,8 @@ async function refreshAdminSection(sectionName = getActiveAdminSection()) {
   }
 
   if (sectionName === "analytics") {
-    await Promise.all([loadProductsData(), loadAnalyticsData(), loadSalesAvgData()]);
-    populatePredictDropdowns();
+    await Promise.all([loadProductsData(), loadAnalyticsData(), loadSalesAvgData(), loadRevenueModelMetadata()]);
+    populateLrDropdowns();
     destroyAnalyticsCharts();
     await initializeCharts();
   }
@@ -405,7 +412,7 @@ async function loadProductsData() {
   if (!productsTable) return;
 
   try {
-    const response = await fetch('/api/admin/products');
+    const response = await fetch('/api/admin/products', { cache: 'no-store' });
     productsData = await response.json();
     populateAdminProductFilters();
 
@@ -575,7 +582,7 @@ async function loadProductsData(force = false) {
 
 async function loadSalesAvgData() {
   try {
-    const resp = await fetch('/api/admin/products/sales-avg');
+    const resp = await fetch('/api/admin/products/sales-avg', { cache: 'no-store' });
     if (!resp.ok) throw new Error('Failed to fetch sales averages');
     salesAvgData = await resp.json();
   } catch (error) {
@@ -584,43 +591,49 @@ async function loadSalesAvgData() {
   }
 }
 
-let predictDropdownsInitialized = false;
 
-function populatePredictDropdowns() {
-  const source = salesAvgData.length ? salesAvgData : productsData;
-  if (!source.length) return;
-  const brandSet = new Set();
-  const typeSet = new Set();
-  source.forEach(p => {
-    if (p.brand) brandSet.add(p.brand);
-    if (p.category) typeSet.add(p.category);
-  });
-  const brandSel = document.getElementById('pd_brand');
-  const typeSel = document.getElementById('pd_part_type');
-  if (!brandSel || !typeSel) return;
-  const currentBrand = brandSel.value;
-  const currentType = typeSel.value;
-  brandSel.innerHTML = '<option value="">Select Brand</option>' +
-    [...brandSet].sort().map(b => `<option value="${b}">${b}</option>`).join('');
-  typeSel.innerHTML = '<option value="">Select Part Type</option>' +
-    [...typeSet].sort().map(t => `<option value="${t}">${t}</option>`).join('');
-  if (currentBrand) brandSel.value = currentBrand;
-  if (currentType) typeSel.value = currentType;
-  if (!predictDropdownsInitialized) {
-    predictDropdownsInitialized = true;
-    const clearSearch = () => {
-      const input = document.getElementById('productSearchInput');
-      if (input) input.value = '';
-    };
-    ['pd_brand','pd_part_type'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('change', clearSearch);
-    });
-    ['pd_price','pd_profit'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('input', clearSearch);
-    });
+async function loadRevenueModelMetadata() {
+  try {
+    const resp = await fetch('/api/admin/ml/revenue-model', { cache: 'no-store' });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || 'Failed to read revenue model metadata');
+    }
+    revenueModelMetadata = data;
+  } catch (error) {
+    console.error('Error loading revenue model metadata:', error);
+    revenueModelMetadata = null;
+    showToast('error', 'Revenue model metadata is unavailable');
   }
+}
+
+function populateLrDropdowns() {
+  const brandSel = document.getElementById('lr_brand');
+  const typeSel = document.getElementById('lr_part_type');
+  if (!brandSel || !typeSel) return;
+
+  typeSel.innerHTML = '<option value="">Select Part Type</option>';
+
+  if (!revenueModelMetadata) {
+    brandSel.innerHTML = '<option value="">Revenue metadata unavailable</option>';
+    return;
+  }
+
+  const modelBrands = Array.isArray(revenueModelMetadata.brands) ? revenueModelMetadata.brands : [];
+  brandSel.innerHTML = '<option value="">Select Brand</option>' +
+    modelBrands.map(b => `<option value="${escapeAdminHtml(b)}">${escapeAdminHtml(b)}</option>`).join('');
+}
+
+function selectModelOption(selectEl, value) {
+  if (!selectEl) return;
+  const normalized = normalizeAdminValue(value);
+  const exact = [...selectEl.options].find(option => normalizeAdminValue(option.value) === normalized);
+  if (exact) {
+    selectEl.value = exact.value;
+    return;
+  }
+  const other = [...selectEl.options].find(option => normalizeAdminValue(option.value) === 'other');
+  selectEl.value = other ? other.value : '';
 }
 
 function filterProductsByCategory(category) {
@@ -1212,7 +1225,8 @@ async function initializeCharts() {
     initializePartTypeChart(),
     initializeBrandMarginsChart(),
     initializeTierDistChart(),
-    initializeRevenueForecastChart()
+    initializeRevenueByBrandChart(),
+    initializeRevenueByPartTypeChart()
   ]);
 }
 
@@ -1326,7 +1340,6 @@ async function initializeRevenueChart() {
 }
 
 // ---- Part Type Breakdown (doughnut) ----
-let partTypeChart = null;
 async function initializePartTypeChart() {
   const ctx = document.getElementById('partTypeChart');
   if (!ctx) return;
@@ -1372,7 +1385,6 @@ async function initializePartTypeChart() {
 }
 
 // ---- Brand Profit Margins (horizontal bar) ----
-let brandMarginsChart = null;
 async function initializeBrandMarginsChart() {
   const ctx = document.getElementById('brandMarginsChart');
   if (!ctx) return;
@@ -1438,7 +1450,6 @@ async function initializeBrandMarginsChart() {
 }
 
 // ---- ML Tier Distribution (doughnut) ----
-let tierDistChart = null;
 async function initializeTierDistChart() {
   const ctx = document.getElementById('tierDistChart');
   if (!ctx) return;
@@ -1487,30 +1498,35 @@ async function initializeTierDistChart() {
   }
 }
 
-async function initializeRevenueForecastChart() {
-  const ctx = document.getElementById('demandForecastChart');
+async function initializeRevenueByBrandChart(from, to) {
+  const ctx = document.getElementById('revenueByBrandChart');
   if (!ctx) return;
-
   try {
-    const res = await fetch('/api/admin/analytics/revenue');
-    let data = await res.json();
-    
-    // Safety check just in case endpoint fails or empty
-    if (!Array.isArray(data)) return;
+    let url = '/api/admin/analytics/brand-revenue-daily';
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    if (qs) url += '?' + qs;
 
-    data = data.slice(0, 10); // Limit to top 10
-    const labels = data.map(d => String(d.name || d.product_name).substring(0, 15) + '...');
-    const values = data.map(d => parseFloat(d.demand_score || 0).toFixed(2));
-    
-    demandChart = new Chart(ctx, {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      if (revenueByBrandChart) { revenueByBrandChart.destroy(); revenueByBrandChart = null; }
+      return;
+    }
+    const top = data.slice(0, 10);
+    if (revenueByBrandChart) revenueByBrandChart.destroy();
+    revenueByBrandChart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels,
+        labels: top.map(d => d.brand),
         datasets: [{
-          label: 'Top 10 Products by Estimated Revenue Tomorrow',
-          data: values,
-          backgroundColor: chartColors.teal,
-          borderWidth: 0,
+          label: 'Avg Daily Revenue (PHP)',
+          data: top.map(d => d.avg_daily_revenue),
+          backgroundColor: 'rgba(30, 224, 255, 0.7)',
+          borderColor: chartColors.cyan,
+          borderWidth: 1,
           borderRadius: 4
         }]
       },
@@ -1522,14 +1538,7 @@ async function initializeRevenueForecastChart() {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: function(context) {
-                let label = context.dataset.label || '';
-                if (label) label += ': ';
-                if (context.parsed.x !== null) {
-                  label += '₱' + context.parsed.x.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                }
-                return label;
-              }
+              label: ctx => '₱' + parseFloat(ctx.raw).toLocaleString('en-US', {minimumFractionDigits: 2})
             }
           }
         },
@@ -1539,145 +1548,314 @@ async function initializeRevenueForecastChart() {
         }
       }
     });
-
   } catch (e) {
-    console.error('Error loading demand forecast chart:', e);
+    console.error('Error loading revenue by brand chart:', e);
   }
 }
 
-function filterPredictProducts(query) {
-  const dropdown = document.getElementById('productSearchDropdown');
-  if (!dropdown) return;
+async function initializeRevenueByPartTypeChart(from, to) {
+  const ctx = document.getElementById('revenueByPartTypeChart');
+  if (!ctx) return;
+  try {
+    let url = '/api/admin/analytics/part-type-revenue-daily';
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    if (qs) url += '?' + qs;
 
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      if (revenueByPartTypeChart) { revenueByPartTypeChart.destroy(); revenueByPartTypeChart = null; }
+      return;
+    }
+    const top = data.slice(0, 10);
+    const colors = [chartColors.cyan, chartColors.green, chartColors.orange, chartColors.pink, chartColors.purple, chartColors.yellow, chartColors.teal, '#6366f1', '#ec4899', '#84cc16'];
+    if (revenueByPartTypeChart) revenueByPartTypeChart.destroy();
+    revenueByPartTypeChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: top.map(d => d.part_type || 'Other'),
+        datasets: [{
+          label: 'Avg Daily Revenue (PHP)',
+          data: top.map(d => d.avg_daily_revenue),
+          backgroundColor: top.map((_, i) => colors[i % colors.length]),
+          borderColor: '#0f1720',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: chartColors.text, font: { size: 11 }, padding: 14, usePointStyle: true }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.label}: ₱${parseFloat(ctx.raw).toLocaleString()}`
+            }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Error loading revenue by part type chart:', e);
+  }
+}
+
+function applyBrandRevFilter() {
+  const from = document.getElementById('brandRevFrom')?.value || '';
+  const to = document.getElementById('brandRevTo')?.value || '';
+  initializeRevenueByBrandChart(from || null, to || null);
+}
+
+function applyPartTypeRevFilter() {
+  const from = document.getElementById('partTypeRevFrom')?.value || '';
+  const to = document.getElementById('partTypeRevTo')?.value || '';
+  initializeRevenueByPartTypeChart(from || null, to || null);
+}
+
+// ---- RF Predictor (by exact product name) ----
+let rfProductMatches = [];
+
+function filterRfProducts(query) {
+  const dropdown = document.getElementById('rf_productSearchDropdown');
+  if (!dropdown) return;
+  document.getElementById('rf_name').value = '';
+  document.getElementById('rf_price').value = '';
+  document.getElementById('rf_profit').value = '';
+  document.getElementById('rf_selected_info').style.display = 'none';
   if (!query || query.length < 1) {
     dropdown.style.display = 'none';
+    rfProductMatches = [];
     return;
   }
-
-  const source = salesAvgData.length ? salesAvgData : productsData;
   const q = query.toLowerCase();
-  const matches = source.filter(p =>
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  rfProductMatches = source.filter(p =>
     (p.name && p.name.toLowerCase().includes(q)) ||
     (p.brand && p.brand.toLowerCase().includes(q)) ||
     (p.category && p.category.toLowerCase().includes(q))
   ).slice(0, 10);
-
-  if (matches.length === 0) {
+  if (!rfProductMatches.length) {
     dropdown.style.display = 'none';
     return;
   }
-
-  dropdown.innerHTML = matches.map((p, idx) => {
-    const displayPrice = p.avg_price || p.price || 0;
-    const displayProfit = p.avg_profit || 0;
-    return `
-      <div data-index="${idx}" onclick="selectPredictProduct(this)" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid rgba(30, 224, 255, 0.1); color: #e2e8f0; transition: background 0.2s;"
-           onmouseover="this.style.background='rgba(30,224,255,0.1)'" onmouseout="this.style.background='transparent'">
-        <div style="font-weight: 500;">${p.name}</div>
-        <div style="font-size: 12px; color: #94a3b8;">${capitalizeFirst(p.brand || '')} — ${capitalizeFirst(p.category || '')} — ₱${Number(displayPrice).toLocaleString()} | Profit: ₱${Number(displayProfit).toLocaleString()}</div>
-      </div>
-    `;
+  dropdown.innerHTML = rfProductMatches.map((p, idx) => {
+    const dp = p.avg_price || p.price || 0;
+    const dpr = p.avg_profit || 0;
+    return `<div data-index="${idx}" onclick="selectRfProduct(this)" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid rgba(30, 224, 255, 0.1); color: #e2e8f0;"
+              onmouseover="this.style.background='rgba(30,224,255,0.1)'" onmouseout="this.style.background='transparent'">
+        <div style="font-weight:500;">${escapeAdminHtml(p.name)}</div>
+        <div style="font-size:12px; color:#94a3b8;">${capitalizeFirst(p.brand||'')} — ${capitalizeFirst(p.category||'')} — ₱${Number(dp).toLocaleString()} | Profit: ₱${Number(dpr).toLocaleString()}</div>
+      </div>`;
   }).join('');
   dropdown.style.display = 'block';
 }
 
-function selectPredictProduct(el) {
+function selectRfProduct(el) {
   const idx = parseInt(el.dataset.index);
-  const source = salesAvgData.length ? salesAvgData : productsData;
-  const product = source[idx];
+  const product = rfProductMatches[idx];
   if (!product) return;
-
-  const input = document.getElementById('productSearchInput');
-  const dropdown = document.getElementById('productSearchDropdown');
-
+  const input = document.getElementById('rf_productSearchInput');
+  const dropdown = document.getElementById('rf_productSearchDropdown');
   input.value = product.name;
   dropdown.style.display = 'none';
-
-  document.getElementById('pd_price').value = product.avg_price || product.price || 0;
-  document.getElementById('pd_profit').value = product.avg_profit || (document.getElementById('pd_price').value * 0.5);
-  const brandSel = document.getElementById('pd_brand');
-  const typeSel = document.getElementById('pd_part_type');
-  if (brandSel) brandSel.value = product.brand || '';
-  if (typeSel) typeSel.value = product.category || '';
+  rfProductMatches = [];
+  document.getElementById('rf_name').value = product.name || '';
+  document.getElementById('rf_price').value = product.avg_price || product.price || 0;
+  document.getElementById('rf_profit').value = product.avg_profit || ((product.avg_price || product.price || 0) * 0.5);
+  const info = document.getElementById('rf_selected_info');
+  info.style.display = 'block';
+  info.innerHTML = `<strong>${escapeAdminHtml(product.name)}</strong> — ${capitalizeFirst(product.brand||'')} | ${capitalizeFirst(product.category||'')} &nbsp; ₱${Number(product.avg_price||product.price||0).toLocaleString()} | Profit: ₱${Number(product.avg_profit||0).toLocaleString()}`;
 }
 
-async function handlePredictRevenue() {
-  const btn = document.querySelector('[onclick="handlePredictRevenue()"]');
-  const resultDiv = document.getElementById('demandPredictionResult');
-  const scoreVal = document.getElementById('demandScoreValue');
-  const inputsDiv = document.getElementById('predictionInputs');
+async function handlePredictRF() {
+  const btn = document.querySelector('[onclick="handlePredictRF()"]');
+  const resultDiv = document.getElementById('rf_result');
+  const scoreVal = document.getElementById('rf_score');
+  const inputsDiv = document.getElementById('rf_inputs');
 
-  const price = document.getElementById('pd_price').value;
-  const profit = document.getElementById('pd_profit').value;
-  const brand = document.getElementById('pd_brand').value;
-  const partType = document.getElementById('pd_part_type').value;
-  const productName = document.getElementById('productSearchInput')?.value || '';
+  const name = document.getElementById('rf_name')?.value || document.getElementById('rf_productSearchInput')?.value || '';
+  const price = document.getElementById('rf_price').value;
+  const profit = document.getElementById('rf_profit').value;
+  const monthVal = parseInt(document.getElementById('rf_month').value);
+  const dayOfWeekVal = parseInt(document.getElementById('rf_dow').value);
 
-  if (!price || !profit || !brand || !partType) {
-    showToast('error', 'Please select a product or fill in brand, part type, price, and profit');
+  if (!name || !price) {
+    showToast('error', 'Select a product from the search first');
     return;
   }
 
-  if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
-    window.AppLoading.setButtonLoading(btn, true, 'Predicting...');
-  } else if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Predicting...';
-  }
+  if (window.AppLoading?.setButtonLoading) window.AppLoading.setButtonLoading(btn, true, 'Predicting...');
+  else if (btn) { btn.disabled = true; btn.textContent = 'Predicting...'; }
 
-  const monthVal = parseInt(document.getElementById('pd_month').value);
-  const dayOfWeekVal = parseInt(document.getElementById('pd_day_of_week').value);
-
-  const monthNames = ['', 'January','February','March','April','May','June','July','August','September','October','November','December'];
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
   inputsDiv.innerHTML = `
-    <strong>${productName}</strong><br>
-    ${capitalizeFirst(brand)} — ${capitalizeFirst(partType)}<br>
-    Avg Price: ₱${Number(price).toLocaleString()} &nbsp;|&nbsp; Avg Profit: ₱${Number(profit).toLocaleString()}<br>
-    ${monthNames[monthVal]} — ${dayNames[dayOfWeekVal]}
+    <strong>${escapeAdminHtml(name)}</strong><br>
+    ${monthNames[monthVal]} | ${dayNames[dayOfWeekVal]}<br>
+    Price: ₱${Number(price).toLocaleString()} | Profit: ₱${Number(profit).toLocaleString()}
   `;
-
-  const payload = {
-    avg_price: parseFloat(price),
-    avg_profit: parseFloat(profit),
-    month: monthVal,
-    day_of_week: dayOfWeekVal,
-    brand: brand,
-    part_type: partType
-  };
 
   try {
     const res = await fetch('/api/admin/ml/predict-revenue', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
-      },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+      body: JSON.stringify({
+        avg_price: parseFloat(price), avg_profit: parseFloat(profit),
+        month: monthVal, day_of_week: dayOfWeekVal,
+        brand: '', part_type: '',
+        product_name: name.trim()
+      })
     });
-
     const data = await res.json();
     if (res.ok) {
-      let revenueVal = parseFloat(data.predicted_revenue_php || 0);
-      scoreVal.textContent = '₱' + revenueVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const rev = parseFloat(data.predicted_revenue_php || 0);
+      scoreVal.textContent = '₱' + rev.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+      // Show live-order adjustment info if present
+      const adj = data.live_order_adjustment;
+      if (adj) {
+        let adjInfo = document.getElementById('rf_adjustment_info');
+        if (!adjInfo) {
+          adjInfo = document.createElement('div');
+          adjInfo.id = 'rf_adjustment_info';
+          adjInfo.style.cssText = 'font-size: 11px; color: #1ee0ff; margin-top: 6px; line-height: 1.4;';
+          document.getElementById('rf_inputs').after(adjInfo);
+        }
+        adjInfo.innerHTML = `
+          Live orders: ${adj.live_units} units | 14d: ${adj.recent_units_14d} units
+          &nbsp;|&nbsp; Adj: ${adj.multiplier}×
+        `;
+      } else {
+        const adjInfo = document.getElementById('rf_adjustment_info');
+        if (adjInfo) adjInfo.remove();
+      }
+
       resultDiv.style.display = 'block';
-      showToast('success', 'Revenue prediction complete');
+      showToast('success', 'RF prediction complete');
     } else {
       showToast('error', data.error || 'Prediction failed');
       resultDiv.style.display = 'none';
     }
   } catch (error) {
-    console.error('Prediction error:', error);
     showToast('error', 'Failed to connect to prediction server');
     resultDiv.style.display = 'none';
   } finally {
-    if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
-      window.AppLoading.setButtonLoading(btn, false);
-    } else if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Predict Revenue for Tomorrow';
+    if (window.AppLoading?.setButtonLoading) window.AppLoading.setButtonLoading(btn, false);
+    else if (btn) { btn.disabled = false; btn.textContent = 'Predict by Name'; }
+  }
+}
+
+// ---- LR Predictor (by brand + part type) ----
+function filterLrPartTypes() {
+  const brand = document.getElementById('lr_brand').value;
+  const typeSel = document.getElementById('lr_part_type');
+  const oldVal = typeSel.value;
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  let types = [];
+  if (brand) {
+    types = [...new Set(source
+      .filter(p => p.brand && p.brand.toLowerCase() === brand.toLowerCase() && p.category)
+      .map(p => p.category)
+    )].sort();
+  }
+  const hasOther = types.some(t => t.toLowerCase() === 'other');
+  if (!hasOther && types.length) types.push('Other');
+  typeSel.innerHTML = '<option value="">Select Part Type</option>' +
+    types.map(t => `<option value="${escapeAdminHtml(t)}">${escapeAdminHtml(t)}</option>`).join('');
+  if (oldVal && types.some(t => t.toLowerCase() === oldVal.toLowerCase())) {
+    typeSel.value = oldVal;
+  }
+  autoFillLrValues();
+}
+
+function autoFillLrValues() {
+  const brand = document.getElementById('lr_brand').value;
+  const partType = document.getElementById('lr_part_type').value;
+  const priceInput = document.getElementById('lr_price');
+  const profitInput = document.getElementById('lr_profit');
+  if (!brand || !partType) return;
+  const source = salesAvgData.length ? salesAvgData : productsData;
+  const matches = source.filter(p =>
+    p.brand && p.brand.toLowerCase() === brand.toLowerCase() &&
+    p.category && p.category.toLowerCase() === partType.toLowerCase()
+  );
+  if (!matches.length) {
+    priceInput.value = '';
+    profitInput.value = '';
+    return;
+  }
+  const prices = matches.map(p => parseFloat(p.avg_price || p.price || 0)).filter(v => !isNaN(v));
+  const profits = matches.map(p => parseFloat(p.avg_profit || 0)).filter(v => !isNaN(v));
+  priceInput.value = prices.length ? (prices.reduce((s, v) => s + v, 0) / prices.length).toFixed(2) : '';
+  profitInput.value = profits.length ? (profits.reduce((s, v) => s + v, 0) / profits.length).toFixed(2) : '';
+}
+
+async function handlePredictLR() {
+  const btn = document.querySelector('[onclick="handlePredictLR()"]');
+  const resultDiv = document.getElementById('lr_result');
+  const scoreVal = document.getElementById('lr_score');
+  const inputsDiv = document.getElementById('lr_inputs');
+
+  const brand = document.getElementById('lr_brand').value;
+  const partType = document.getElementById('lr_part_type').value;
+  const price = document.getElementById('lr_price').value;
+  const profit = document.getElementById('lr_profit').value;
+  const monthVal = parseInt(document.getElementById('lr_month').value);
+  const dayOfWeekVal = parseInt(document.getElementById('lr_dow').value);
+
+    if (!brand || !partType || !price || isNaN(parseFloat(price))) {
+    showToast('error', 'Fill in brand, part type, and price');
+    return;
+  }
+
+  if (window.AppLoading?.setButtonLoading) window.AppLoading.setButtonLoading(btn, true, 'Predicting...');
+  else if (btn) { btn.disabled = true; btn.textContent = 'Predicting...'; }
+
+  const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+  const displayProfit = parseFloat(profit || 0);
+  inputsDiv.innerHTML = `
+    <strong>${capitalizeFirst(brand)} — ${capitalizeFirst(partType)}</strong><br>
+    ${monthNames[monthVal]} | ${dayNames[dayOfWeekVal]}<br>
+    Price: ₱${Number(price).toLocaleString()} | Profit: ₱${Number(displayProfit).toLocaleString()}
+  `;
+
+  try {
+    const res = await fetch('/api/admin/ml/predict-revenue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+      body: JSON.stringify({
+        avg_price: parseFloat(price), avg_profit: parseFloat(profit || 0),
+        month: monthVal, day_of_week: dayOfWeekVal,
+        brand, part_type: partType,
+        product_name: ''
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const rev = parseFloat(data.predicted_revenue_php || 0);
+      scoreVal.textContent = '₱' + rev.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      resultDiv.style.display = 'block';
+      showToast('success', 'LR prediction complete');
+    } else {
+      showToast('error', data.error || 'Prediction failed');
+      resultDiv.style.display = 'none';
     }
+  } catch (error) {
+    showToast('error', 'Failed to connect to prediction server');
+    resultDiv.style.display = 'none';
+  } finally {
+    if (window.AppLoading?.setButtonLoading) window.AppLoading.setButtonLoading(btn, false);
+    else if (btn) { btn.disabled = false; btn.textContent = 'Predict by Category'; }
   }
 }
 
@@ -2162,6 +2340,7 @@ async function loadAnalyticsData() {
 
 async function saveStoreInfo(event) {
   event.preventDefault();
+  const saveButton = event?.submitter || event?.target?.querySelector?.('button[type="submit"]');
   const storeName = document.getElementById("storeName").value;
   const storeEmail = document.getElementById("storeEmail").value;
   const storePhone = document.getElementById("storePhone").value;
@@ -2174,6 +2353,7 @@ async function saveStoreInfo(event) {
   }
 
   try {
+    window.AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
     const response = await fetch('/api/admin/settings', {
       method: 'PUT',
       headers: {
@@ -2193,11 +2373,14 @@ async function saveStoreInfo(event) {
   } catch (error) {
     console.error('Error saving store info:', error);
     showToast("error", "Network error while saving store information");
+  } finally {
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
 async function saveNotificationSettings(event) {
   event.preventDefault();
+  const saveButton = event?.submitter || event?.target?.querySelector?.('button[type="submit"]');
   const settings = {
     emailNotif: document.getElementById("emailNotif")?.checked ?? true,
     orderNotif: document.getElementById("orderNotif")?.checked ?? true,
@@ -2206,6 +2389,7 @@ async function saveNotificationSettings(event) {
   };
 
   try {
+    window.AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
     const response = await fetch('/api/admin/settings', {
       method: 'PUT',
       headers: {
@@ -2225,11 +2409,14 @@ async function saveNotificationSettings(event) {
   } catch (error) {
     console.error('Error saving notification settings:', error);
     showToast("error", "Network error while saving notification settings");
+  } finally {
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
 async function saveBusinessHours(event) {
   event.preventDefault();
+  const saveButton = event?.submitter || event?.target?.querySelector?.('button[type="submit"]');
   const settings = {
     openingTime: document.getElementById("openingTime")?.value || "09:00",
     closingTime: document.getElementById("closingTime")?.value || "18:00",
@@ -2237,6 +2424,7 @@ async function saveBusinessHours(event) {
   };
 
   try {
+    window.AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
     const response = await fetch('/api/admin/settings', {
       method: 'PUT',
       headers: {
@@ -2256,11 +2444,14 @@ async function saveBusinessHours(event) {
   } catch (error) {
     console.error('Error saving business hours:', error);
     showToast("error", "Network error while saving business hours");
+  } finally {
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
 async function changePassword(event) {
   event.preventDefault();
+  const saveButton = event?.submitter || event?.target?.querySelector?.('button[type="submit"]');
   const current = document.getElementById('currentPassword')?.value;
   const newPass = document.getElementById('newPassword')?.value;
   const confirmPass = document.getElementById('confirmPassword')?.value;
@@ -2274,6 +2465,7 @@ async function changePassword(event) {
   }
 
   try {
+    window.AppLoading?.setButtonLoading?.(saveButton, true, 'Updating...');
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/profile/password';
@@ -2309,6 +2501,7 @@ async function changePassword(event) {
   } catch (error) {
     console.error('Error changing password:', error);
     showToast("error", "Failed to change password");
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
@@ -3530,7 +3723,7 @@ async function syncMLData() {
   const btn = document.getElementById('btnSyncMl');
   if (!btn || btn.disabled) return;
 
-  window.AppLoading?.setButtonLoading?.(btn, true, 'Syncing...');
+  window.AppLoading?.setButtonLoading?.(btn, true, 'Refreshing...');
 
   try {
     const response = await fetch('/api/admin/ml/sync', {
@@ -3544,19 +3737,32 @@ async function syncMLData() {
     });
 
     const data = await response.json();
+    if (data.output) console.info('Sync output:', data.output);
 
     if (response.ok && data.success) {
-      showToast('success', 'Smart analytics updated successfully.');
-      loadDashboardData();
+      showToast('success', data.message || 'Smart analytics updated successfully.');
     } else {
-      showToast('error', data.message || 'Failed to refresh smart suggestions.');
-      console.error(data.output);
+      showToast('warning', data.message || 'Sync had issues, but data will still refresh.');
     }
   } catch (err) {
     console.error('Critical failure attempting to trigger the Sync handler:', err);
-    showToast('error', 'Network connection failed while refreshing smart suggestions.');
-  } finally {
-    window.AppLoading?.setButtonLoading?.(btn, false);
+    showToast('warning', 'Sync request failed, refreshing local data anyway.');
   }
+
+  // Always refresh data regardless of sync result
+  productsLoadedAt = 0;
+  await Promise.all([
+    loadProductsData(true),
+    loadSalesAvgData(),
+    loadRevenueModelMetadata(),
+    loadAnalyticsData(),
+    loadDashboardData(),
+    loadDashboardStats()
+  ]);
+  populateLrDropdowns();
+  destroyAnalyticsCharts();
+  await initializeCharts();
+
+  window.AppLoading?.setButtonLoading?.(btn, false);
 }
 

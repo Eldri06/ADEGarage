@@ -108,7 +108,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/api/admin/analytics/tier-distribution',    [SalesAnalyticsController::class, 'tierDistribution'])->name('admin.analytics.tier-distribution');
     Route::get('/api/admin/analytics/part-type-breakdown',  [SalesAnalyticsController::class, 'partTypeBreakdown'])->name('admin.analytics.part-type');
     Route::get('/api/admin/analytics/revenue',              [SalesAnalyticsController::class, 'revenueForecast'])->name('admin.analytics.revenue');
+    Route::get('/api/admin/analytics/brand-revenue-daily',  [SalesAnalyticsController::class, 'brandRevenueDaily'])->name('admin.analytics.brand-revenue-daily');
+    Route::get('/api/admin/analytics/part-type-revenue-daily', [SalesAnalyticsController::class, 'partTypeRevenueDaily'])->name('admin.analytics.part-type-revenue-daily');
     Route::get('/api/admin/products/sales-avg',             [SalesAnalyticsController::class, 'productsWithSalesAvg'])->name('admin.products.sales-avg');
+    Route::get('/api/admin/ml/revenue-model',               [SalesAnalyticsController::class, 'revenueModelMetadata'])->name('admin.ml.revenue-model');
     Route::post('/api/admin/ml/predict-tier',               [SalesAnalyticsController::class, 'predictTier'])->name('admin.ml.predict-tier');
     Route::post('/api/admin/ml/predict-revenue',            [SalesAnalyticsController::class, 'predictRevenue'])->name('admin.ml.predict-revenue');
     Route::post('/api/admin/ml/sync',                       [SalesAnalyticsController::class, 'runClassification'])->name('admin.ml.sync');

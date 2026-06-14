@@ -30,6 +30,8 @@ kmeans_model   = load_pickle('kmeans_model.pkl')
 kmeans_scaler  = load_pickle('kmeans_scaler.pkl')
 linreg_model   = load_pickle('linreg_model.pkl')
 linreg_features = load_pickle('linreg_features.pkl')
+product_rf_model = load_pickle('product_rf_model.pkl')
+product_features = load_pickle('product_features.pkl')
 
 # Cluster ID -> Human-readable tier mapping (confirmed by user from Colab)
 TIER_MAP = {
@@ -37,6 +39,95 @@ TIER_MAP = {
     1: {'name': 'Fast-Moving', 'label': 'Fast-Moving / Volume',  'description': 'High sales frequency and quantity'},
     2: {'name': 'Premium',     'label': 'Premium / High-Value',  'description': 'High-ticket items with highest price and profit'},
 }
+
+def linreg_allowed(prefix):
+    if linreg_features is None:
+        return []
+    return [f.replace(prefix, '', 1) for f in linreg_features if f.startswith(prefix)]
+
+def linreg_one_hot(feature_name, prefix, submitted_value, allowed_values):
+    expected = feature_name.replace(prefix, '', 1)
+    submitted = str(submitted_value or '').strip()
+    if submitted.lower() == expected.lower():
+        return 1.0
+    if expected.lower() == 'other' and not any(submitted.lower() == value.lower() for value in allowed_values if value.lower() != 'other'):
+        return 1.0
+    return 0.0
+
+def build_linreg_features(data, month=None, day_of_week=None):
+    if linreg_features is None:
+        raise ValueError('Linear Regression feature file not loaded')
+
+    allowed_brands = linreg_allowed('brand_')
+    allowed_part_types = linreg_allowed('part_type_')
+    feature_values = []
+    for f in linreg_features:
+        if f == 'month':
+            val = float(month if month is not None else data.get('month'))
+        elif f == 'day_of_week':
+            val = float(day_of_week if day_of_week is not None else data.get('day_of_week'))
+        elif f == 'log_avg_price':
+            val = np.log1p(float(data.get('avg_price', 0)))
+        elif f == 'log_avg_profit':
+            val = np.log1p(float(data.get('avg_profit', 0)))
+        elif f.startswith('brand_'):
+            val = linreg_one_hot(f, 'brand_', data.get('brand', ''), allowed_brands)
+        elif f.startswith('part_type_'):
+            val = linreg_one_hot(f, 'part_type_', data.get('part_type', ''), allowed_part_types)
+        else:
+            raise ValueError(f'Unsupported Linear Regression feature: {f}')
+        feature_values.append(val)
+    return np.array([feature_values])
+
+def product_names():
+    if product_features is None:
+        return []
+    return [f.replace('product_', '', 1) for f in product_features if f.startswith('product_')]
+
+def exact_product_feature(product_name):
+    submitted = str(product_name or '').strip()
+    if product_features is None:
+        return None
+    for f in product_features:
+        if f.startswith('product_') and f.replace('product_', '', 1) == submitted:
+            return f
+    return None
+
+def build_product_features(data, product_feature, month=None, day_of_week=None):
+    if product_features is None:
+        raise ValueError('Random Forest feature file not loaded')
+
+    feature_values = []
+    for f in product_features:
+        if f == 'month':
+            val = float(month if month is not None else data.get('month'))
+        elif f == 'day_of_week':
+            val = float(day_of_week if day_of_week is not None else data.get('day_of_week'))
+        elif f == 'avg_price':
+            val = np.log1p(float(data.get('avg_price', 0)))
+        elif f == 'avg_profit':
+            val = np.log1p(float(data.get('avg_profit', 0)))
+        elif f.startswith('product_'):
+            val = 1.0 if f == product_feature else 0.0
+        else:
+            raise ValueError(f'Unsupported Random Forest feature: {f}')
+        feature_values.append(val)
+    return np.array([feature_values])
+
+def predict_revenue_value(data, month=None, day_of_week=None):
+    product_feature = exact_product_feature(data.get('product_name') or data.get('name') or data.get('product'))
+    if product_feature:
+        if product_rf_model is None:
+            raise ValueError('Random Forest model not loaded')
+        features = build_product_features(data, product_feature, month, day_of_week)
+        prediction_log = float(product_rf_model.predict(features)[0])
+        return round(float(np.expm1(prediction_log)), 2), 'random_forest'
+
+    if linreg_model is None or linreg_features is None:
+        raise ValueError('Linear Regression model not loaded')
+    features = build_linreg_features(data, month, day_of_week)
+    prediction_log = float(linreg_model.predict(features)[0])
+    return round(float(np.expm1(prediction_log)), 2), 'linear_regression'
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -52,6 +143,8 @@ def health():
             'kmeans_scaler': kmeans_scaler is not None,
             'linreg': linreg_model is not None,
             'linreg_features': linreg_features is not None,
+            'product_rf': product_rf_model is not None,
+            'product_features': product_features is not None,
         }
     })
 
@@ -144,52 +237,19 @@ def predict_tier_batch():
 @app.route('/predict/revenue', methods=['POST'])
 def predict_revenue():
     """
-    Predict daily revenue using Linear Regression.
+    Predict daily revenue using Random Forest for exact SKUs, else Linear Regression.
 
     Expects JSON body: { "avg_price": 50, "avg_profit": 10, "month": 6, "day_of_week": 1, "brand": "Honda", "part_type": "Brake" }
     Returns:  { "predicted_revenue_php": 1250.50 }
     """
-    if linreg_model is None:
-        return jsonify({'error': 'Linear Regression model not loaded'}), 503
-
     data = request.get_json(force=True)
 
     try:
-        feature_values = []
-        if linreg_features is not None:
-            for f in linreg_features:
-                if f == 'month':
-                    val = float(data.get('month', 1))
-                elif f == 'day_of_week':
-                    val = float(data.get('day_of_week', 0))
-                elif f == 'log_avg_price':
-                    val = np.log1p(float(data.get('avg_price', 0)))
-                elif f == 'log_avg_profit':
-                    val = np.log1p(float(data.get('avg_profit', 0)))
-                elif f.startswith('brand_'):
-                    brand = f.replace('brand_', '')
-                    p_brand = str(data.get('brand', '')).strip()
-                    val = 1.0 if p_brand.lower() == brand.lower() else 0.0
-                elif f.startswith('part_type_'):
-                    ptype = f.replace('part_type_', '')
-                    p_ptype = str(data.get('part_type', '')).strip()
-                    val = 1.0 if p_ptype.lower() == ptype.lower() else 0.0
-                else:
-                    val = float(data.get(f, 0))
-                feature_values.append(val)
-        else:
-            # Fallback
-            feature_values = [
-                float(data.get('avg_price', 0)),
-                float(data.get('total_qty', 0)),
-                float(data.get('avg_profit', 0)),
-            ]
-
-        features = np.array([feature_values])
-        prediction_log = float(linreg_model.predict(features)[0])
-        predicted_revenue_php = np.expm1(prediction_log)
-
-        return jsonify({'predicted_revenue_php': round(predicted_revenue_php, 2)})
+        predicted_revenue_php, model_used = predict_revenue_value(data)
+        return jsonify({
+            'predicted_revenue_php': predicted_revenue_php,
+            'model_used': model_used,
+        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -200,9 +260,6 @@ def predict_revenue_batch():
     """
     Batch predict demand scores for multiple products.
     """
-    if linreg_model is None:
-        return jsonify({'error': 'Linear Regression model not loaded'}), 503
-
     data = request.get_json(force=True)
     products = data.get('products', [])
 
@@ -219,60 +276,31 @@ def predict_revenue_batch():
 
     for product in products:
         try:
-            # Prepare features
-            feature_values = []
-            if linreg_features is not None:
-                for f in linreg_features:
-                    if f == 'month':
-                        val = float(curr_month)
-                    elif f == 'day_of_week':
-                        val = float(curr_dow)
-                    elif f == 'log_avg_price':
-                        val = np.log1p(float(product.get('avg_price', 0)))
-                    elif f == 'log_avg_profit':
-                        val = np.log1p(float(product.get('avg_profit', 0)))
-                    elif f.startswith('brand_'):
-                        brand = f.replace('brand_', '')
-                        p_brand = str(product.get('brand', '')).strip()
-                        val = 1.0 if p_brand.lower() == brand.lower() else 0.0
-                        # Handle 'Other' brand
-                        if brand == 'Other' and not any(str(product.get('brand', '')).lower() == b.lower() for b in ['Makoto', 'Maxxis', 'Pitsbike', 'Shell', 'Skygo', 'Suzuki', 'TVS', 'Yamaha']):
-                             val = 1.0
-                    elif f.startswith('part_type_'):
-                        ptype = f.replace('part_type_', '')
-                        p_ptype = str(product.get('part_type', '')).strip()
-                        val = 1.0 if p_ptype.lower() == ptype.lower() else 0.0
-                        # Handle 'Other' part type
-                        if ptype == 'Other' and not any(str(product.get('part_type', '')).lower() == t.lower() for t in ['Brake', 'Clutch', 'Cowling', 'Drive Train', 'Electrical', 'Engine', 'Fender', 'Filter', 'Gasket', 'Handlebar', 'Instrument', 'Lighting', 'Panel/Cover', 'Seal', 'Stand', 'Wheel']):
-                            val = 1.0
-                    else:
-                        val = float(product.get(f, 0))
-                    feature_values.append(val)
-            else:
-                feature_values = [
-                    float(product.get('avg_price', 0)),
-                    float(product.get('total_qty', 0)),
-                    float(product.get('avg_profit', 0)),
-                ]
-
-            features = np.array([feature_values])
-            prediction = float(linreg_model.predict(features)[0])
-            
-            # Normalize demand score to 0-100 range roughly
-            demand_score = max(0, min(100, round(prediction * 10, 2)))
+            predicted_revenue_php, model_used = predict_revenue_value(product, curr_month, curr_dow)
 
             results.append({
                 'id': product.get('id'),
-                'demand_score': demand_score
+                'predicted_revenue_php': predicted_revenue_php,
+                'model_used': model_used,
             })
         except Exception as e:
             results.append({
                 'id': product.get('id'),
                 'error': str(e),
-                'demand_score': 0
+                'predicted_revenue_php': 0
             })
 
     return jsonify({'results': results})
+
+@app.route('/predict/revenue/metadata', methods=['GET'])
+def predict_revenue_metadata():
+    return jsonify({
+        'brands': linreg_allowed('brand_'),
+        'part_types': linreg_allowed('part_type_'),
+        'products': product_names(),
+        'features': linreg_features or [],
+        'product_features': product_features or [],
+    })
 
 
 @app.route('/tiers', methods=['GET'])
@@ -293,6 +321,8 @@ if __name__ == '__main__':
     print(f"  K-Means Scaler:  {'Loaded' if kmeans_scaler else 'NOT FOUND'}")
     print(f"  LinReg Model:    {'Loaded' if linreg_model else 'NOT FOUND'}")
     print(f"  LinReg Features: {'Loaded' if linreg_features else 'NOT FOUND'}")
+    print(f"  Product RF:      {'Loaded' if product_rf_model else 'NOT FOUND'}")
+    print(f"  Product Features:{'Loaded' if product_features else 'NOT FOUND'}")
     print("=" * 50)
 
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)

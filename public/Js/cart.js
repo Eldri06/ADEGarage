@@ -100,7 +100,11 @@ window.addToCart = async function addToCart(productId, quantity = 1, options = {
  */
 window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
   const item = document.querySelector(`[data-item-id="${cartItemId}"]`);
-  item?.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+  const actionButton = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+  window.AppLoading?.setButtonLoading?.(actionButton, true, 'Updating...');
+  item?.querySelectorAll('button').forEach((button) => {
+    if (button !== actionButton) button.disabled = true;
+  });
   try {
     const response = await fetch(`/api/cart/${cartItemId}`, {
       method: 'PUT',
@@ -122,6 +126,7 @@ window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
     console.error('Error updating cart:', error);
     showCartToast('error', 'An error occurred while updating cart');
   } finally {
+    window.AppLoading?.setButtonLoading?.(actionButton, false);
     item?.querySelectorAll('button').forEach((button) => { button.disabled = false; });
   }
 }
@@ -131,7 +136,11 @@ window.updateCartItem = async function updateCartItem(cartItemId, quantity) {
  */
 window.removeFromCart = async function removeFromCart(cartItemId) {
   const item = document.querySelector(`[data-item-id="${cartItemId}"]`);
-  item?.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+  const actionButton = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+  window.AppLoading?.setButtonLoading?.(actionButton, true, 'Removing...');
+  item?.querySelectorAll('button').forEach((button) => {
+    if (button !== actionButton) button.disabled = true;
+  });
   try {
     const response = await fetch(`/api/cart/${cartItemId}`, {
       method: 'DELETE',
@@ -153,6 +162,7 @@ window.removeFromCart = async function removeFromCart(cartItemId) {
     console.error('Error removing from cart:', error);
     showCartToast('error', 'An error occurred while removing item');
   } finally {
+    window.AppLoading?.setButtonLoading?.(actionButton, false);
     item?.querySelectorAll('button').forEach((button) => { button.disabled = false; });
   }
 }
@@ -165,6 +175,8 @@ window.clearCart = async function clearCart() {
     return;
   }
 
+  const actionButton = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+  window.AppLoading?.setButtonLoading?.(actionButton, true, 'Clearing...');
   try {
     const response = await fetch('/api/cart', {
       method: 'DELETE',
@@ -185,6 +197,8 @@ window.clearCart = async function clearCart() {
   } catch (error) {
     console.error('Error clearing cart:', error);
     showCartToast('error', 'An error occurred while clearing cart');
+  } finally {
+    window.AppLoading?.setButtonLoading?.(actionButton, false);
   }
 }
 

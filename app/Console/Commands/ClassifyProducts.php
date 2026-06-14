@@ -239,27 +239,27 @@ class ClassifyProducts extends Command
         $updateBar->finish();
         $this->newLine(2);
 
-        $this->info('Predicting demand scores per product...');
+        $this->info('Predicting revenue per product with Linear Regression...');
         $demandBar = $this->output->createProgressBar(count($batchPayload));
-        
-        foreach ($batchPayload as $payload) {
-            try {
-                $demandPayload = array_merge($payload, [
-                    'month' => date('n'),
-                    'day_of_week' => date('N') - 1,
-                ]);
-                $demandResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/demand', $demandPayload);
-                if ($demandResponse->successful()) {
-                    $demandScore = $demandResponse->json('predicted_daily_revenue_php', 0);
-                    Product::updateOrCreate(
-                        ['name' => $payload['name']],
-                        ['demand_score' => $demandScore]
-                    );
+
+        try {
+            $batchDemandResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/revenue/batch', [
+                'products' => $batchPayload
+            ]);
+            if ($batchDemandResponse->successful()) {
+                foreach ($batchDemandResponse->json('results', []) as $result) {
+                    $idx = $result['id'] ?? null;
+                    if ($idx !== null && isset($products[$idx])) {
+                        Product::updateOrCreate(
+                            ['name' => $products[$idx]->product],
+                            ['demand_score' => $result['predicted_revenue_php'] ?? 0]
+                        );
+                    }
+                    $demandBar->advance();
                 }
-            } catch (\Exception $e) {
-                // Suppress per-product demand errors so the loop continues
             }
-            $demandBar->advance();
+        } catch (\Exception $e) {
+            $this->warn('Revenue prediction batch failed: ' . $e->getMessage());
         }
         $demandBar->finish();
 

@@ -179,7 +179,7 @@ let currentQuantity = 1;
           window.openProductModal(card, productItem, mode);
         }
         window.AppLoading?.setButtonLoading?.(btn, false);
-      }, 150);
+      }, 300);
     };
 
     // Make function globally accessible
@@ -764,7 +764,7 @@ let currentQuantity = 1;
     }
 
     window.placeOrder = async function placeOrder() {
-      const placeOrderBtn = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
+      const placeOrderBtn = document.querySelector('.checkout-btn');
       try {
         const form = document.getElementById('checkoutForm');
         

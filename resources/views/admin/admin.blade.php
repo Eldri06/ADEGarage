@@ -36,7 +36,7 @@
     </div>
   </div>
 
-  <aside class="admin-sidebar" id="adminSidebar"></aside>
+  <aside class="admin-sidebar" id="adminSidebar">
 
     <div class="sidebar-header">
 
@@ -846,94 +846,138 @@
 
       </div>
 
-      <!-- Row 5: Demand Forecast -->
+      <!-- Row 5: Average Daily Revenue by Brand + Average Daily Revenue by Part Type -->
       <div class="charts-row">
         <div class="chart-card">
           <div class="chart-header">
-            <h3 id="demandChartTitle">Top 10 Products by Estimated Revenue Tomorrow</h3>
+            <h3>Average Daily Revenue by Brand</h3>
+          </div>
+          <div class="chart-filter-row" style="display: flex; gap: 8px; align-items: center; padding: 0 16px 12px; flex-wrap: wrap;">
+            <label style="font-size: 11px; color: #64748b;">From:</label>
+            <input type="date" class="form-control" id="brandRevFrom" style="width: 140px; font-size: 12px; padding: 4px 8px;">
+            <label style="font-size: 11px; color: #64748b;">To:</label>
+            <input type="date" class="form-control" id="brandRevTo" style="width: 140px; font-size: 12px; padding: 4px 8px;">
+            <button class="btn-action btn-primary" id="brandRevFilterBtn" style="font-size: 11px; padding: 4px 12px;" onclick="applyBrandRevFilter()">Apply</button>
           </div>
           <div class="chart-placeholder">
-            <canvas id="demandForecastChart"></canvas>
+            <canvas id="revenueByBrandChart"></canvas>
           </div>
         </div>
-
-        <div class="data-card" style="flex: 1; padding: 20px;">
-          <div class="card-header">
-            <h3><i class="fas fa-calculator" style="color: #1eff8e; margin-right: 8px;"></i>Predict Revenue for Tomorrow</h3>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Average Daily Revenue by Part Type</h3>
           </div>
-          <div class="settings-form">
+          <div class="chart-filter-row" style="display: flex; gap: 8px; align-items: center; padding: 0 16px 12px; flex-wrap: wrap;">
+            <label style="font-size: 11px; color: #64748b;">From:</label>
+            <input type="date" class="form-control" id="partTypeRevFrom" style="width: 140px; font-size: 12px; padding: 4px 8px;">
+            <label style="font-size: 11px; color: #64748b;">To:</label>
+            <input type="date" class="form-control" id="partTypeRevTo" style="width: 140px; font-size: 12px; padding: 4px 8px;">
+            <button class="btn-action btn-primary" id="partTypeRevFilterBtn" style="font-size: 11px; padding: 4px 12px;" onclick="applyPartTypeRevFilter()">Apply</button>
+          </div>
+          <div class="chart-placeholder">
+            <canvas id="revenueByPartTypeChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 6: Two Predictor Cards -->
+      <div class="form-row" style="margin-bottom: 32px;">
+
+        {{-- Card 1: RF Predictor (by exact product name) --}}
+        <div class="data-card" style="margin-bottom: 0; border-top: 3px solid #1ee0ff;">
+          <div class="card-header" style="margin-bottom: 16px;">
+            <h3 style="font-size: 15px; color: #1ee0ff;">Predict by Exact Product Name</h3>
+            <span style="font-size: 11px; background: rgba(30,224,255,0.15); color: #1ee0ff; padding: 3px 10px; border-radius: 10px;">Most Accurate</span>
+          </div>
+          <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; padding: 0 16px;">Predict a specific product&rsquo;s revenue tomorrow</div>
+          <div class="settings-form" style="gap: 14px;">
             <div class="form-group">
-              <label>Search Product</label>
+              <label>Search Product (SKU)</label>
               <div style="position: relative;">
-                <input type="text" class="form-control" id="productSearchInput" placeholder="Type product name..." autocomplete="off" onkeyup="filterPredictProducts(this.value)">
-                <div id="productSearchDropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1a2332; border: 1px solid rgba(30, 224, 255, 0.2); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000;"></div>
+                <input type="text" class="form-control" id="rf_productSearchInput" placeholder="Type exact product name..." autocomplete="off" onkeyup="filterRfProducts(this.value)">
+                <div id="rf_productSearchDropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1a2332; border: 1px solid rgba(30, 224, 255, 0.2); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000;"></div>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Brand</label>
-                <select class="form-control" id="pd_brand">
-                  <option value="">Select Brand</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Part Type</label>
-                <select class="form-control" id="pd_part_type">
-                  <option value="">Select Part Type</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Avg Price (₱)</label>
-                <input type="number" class="form-control" id="pd_price" placeholder="0.00" step="0.01">
-              </div>
-              <div class="form-group">
-                <label>Avg Profit (₱)</label>
-                <input type="number" class="form-control" id="pd_profit" placeholder="0.00" step="0.01">
-              </div>
-            </div>
-            <div class="form-row">
+            <div style="font-size: 12px; color: #64748b; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 4px; display: none;" id="rf_selected_info"></div>
+            <div class="form-row" style="gap: 10px;">
               <div class="form-group" style="flex: 1;">
                 <label>Month</label>
-                <select class="form-control" id="pd_month">
-                  <option value="1">January</option>
-                  <option value="2">February</option>
-                  <option value="3">March</option>
-                  <option value="4">April</option>
-                  <option value="5">May</option>
-                  <option value="6">June</option>
-                  <option value="7">July</option>
-                  <option value="8">August</option>
-                  <option value="9">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
+                <select class="form-control" id="rf_month">
+                  <option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
                 </select>
               </div>
               <div class="form-group" style="flex: 1;">
                 <label>Day of Week</label>
-                <select class="form-control" id="pd_day_of_week">
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                  <option value="6">Saturday</option>
-                  <option value="0">Sunday</option>
+                <select class="form-control" id="rf_dow">
+                  <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option>
                 </select>
               </div>
             </div>
-            <button class="btn-action btn-primary" onclick="handlePredictRevenue()" style="margin-top: 10px; width: 100%;">
-              <i class="fas fa-chart-line"></i> Predict Revenue for Tomorrow
+            <input type="hidden" id="rf_name" value="">
+            <input type="hidden" id="rf_price" value="">
+            <input type="hidden" id="rf_profit" value="">
+            <button class="btn-action btn-primary" onclick="handlePredictRF()" style="width: 100%;">
+              Predict by Name
             </button>
-            <div id="demandPredictionResult" style="margin-top: 20px; padding: 15px; background: rgba(30, 224, 255, 0.1); border: 1px solid rgba(30, 224, 255, 0.3); border-radius: 8px; display: none;">
-              <h4 style="margin:0 0 10px 0; color:#1ee0ff;">Estimated Revenue for Tomorrow</h4>
-              <div id="predictionInputs" style="font-size: 13px; color: #94a3b8; margin-bottom: 12px; line-height: 1.6;"></div>
-              <div style="font-size: 24px; font-weight: bold; color: #fff;" id="demandScoreValue">₱0.00</div>
+            <div id="rf_result" style="display: none; margin-top: 8px; padding: 12px; background: rgba(30,224,255,0.08); border: 1px solid rgba(30,224,255,0.25); border-radius: 6px;">
+              <div id="rf_inputs" style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 6px;"></div>
+              <div style="font-size: 20px; font-weight: bold; color: #fff;" id="rf_score">₱0.00</div>
             </div>
           </div>
         </div>
+
+        {{-- Card 2: LR Predictor (by brand + part type) --}}
+        <div class="data-card" style="margin-bottom: 0; border-top: 3px solid #1eff8e;">
+          <div class="card-header" style="margin-bottom: 16px;">
+            <h3 style="font-size: 15px; color: #1eff8e;">Predict by Category</h3>
+            <span style="font-size: 11px; background: rgba(30,255,142,0.15); color: #1eff8e; padding: 3px 10px; border-radius: 10px;">For New Products</span>
+          </div>
+          <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; padding: 0 16px;">Estimate revenue for a new product by brand &amp; category</div>
+          <div class="settings-form" style="gap: 14px;">
+            <div class="form-row" style="gap: 10px;">
+              <div class="form-group" style="flex: 1;">
+                <label>Brand</label>
+                <select class="form-control" id="lr_brand" onchange="filterLrPartTypes()"><option value="">Select Brand</option></select>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Part Type</label>
+                <select class="form-control" id="lr_part_type" onchange="autoFillLrValues()"><option value="">Select Part Type</option></select>
+              </div>
+            </div>
+            <div class="form-row" style="gap: 10px;">
+              <div class="form-group" style="flex: 1;">
+                <label>Avg Price (₱)</label>
+                <input type="number" class="form-control" id="lr_price" placeholder="0.00" step="0.01">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Avg Profit (₱)</label>
+                <input type="number" class="form-control" id="lr_profit" placeholder="0.00" step="0.01">
+              </div>
+            </div>
+            <div class="form-row" style="gap: 10px;">
+              <div class="form-group" style="flex: 1;">
+                <label>Month</label>
+                <select class="form-control" id="lr_month">
+                  <option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Day of Week</label>
+                <select class="form-control" id="lr_dow">
+                  <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn-action btn-primary" onclick="handlePredictLR()" style="width: 100%; background: linear-gradient(135deg, #1eff8e, #14b86b);">
+              Predict by Category
+            </button>
+            <div id="lr_result" style="display: none; margin-top: 8px; padding: 12px; background: rgba(30,255,142,0.08); border: 1px solid rgba(30,255,142,0.25); border-radius: 6px;">
+              <div id="lr_inputs" style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 6px;"></div>
+              <div style="font-size: 20px; font-weight: bold; color: #fff;" id="lr_score">₱0.00</div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </section>

@@ -42,6 +42,57 @@ class SalesAnalyticsController extends Controller
         return round($revenue * 0.30, 2);
     }
 
+    private function liveProductOrderStats(string $productName, int $targetMonth, int $targetDayOfWeek): array
+    {
+        $targetIsoDay = $targetDayOfWeek + 1; // Frontend uses Monday=0, Carbon ISO uses Monday=1.
+        $items = OrderItem::query()
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereNotIn('orders.status', ['cancelled'])
+            ->whereRaw('LOWER(TRIM(order_items.product_name)) = ?', [strtolower(trim($productName))])
+            ->select([
+                'order_items.quantity',
+                'order_items.subtotal',
+                'orders.created_at',
+            ])
+            ->get();
+
+        $recentCutoff = Carbon::now()->subDays(14);
+
+        return [
+            'live_units' => (int) $items->sum('quantity'),
+            'live_revenue' => round((float) $items->sum('subtotal'), 2),
+            'recent_units_14d' => (int) $items
+                ->filter(fn ($item) => Carbon::parse($item->created_at)->gte($recentCutoff))
+                ->sum('quantity'),
+            'target_month_units' => (int) $items
+                ->filter(fn ($item) => Carbon::parse($item->created_at)->month === $targetMonth)
+                ->sum('quantity'),
+            'target_dow_units' => (int) $items
+                ->filter(fn ($item) => Carbon::parse($item->created_at)->dayOfWeekIso === $targetIsoDay)
+                ->sum('quantity'),
+        ];
+    }
+
+    private function applyLiveRfAdjustment(float $prediction, array $stats): array
+    {
+        if (($stats['live_units'] ?? 0) <= 0) {
+            return [
+                'prediction' => $prediction,
+                'multiplier' => 1.0,
+            ];
+        }
+
+        $recentLift = min(0.35, ((int) $stats['recent_units_14d']) * 0.04);
+        $monthLift = min(0.20, ((int) $stats['target_month_units']) * 0.015);
+        $dowLift = min(0.15, ((int) $stats['target_dow_units']) * 0.025);
+        $multiplier = round(1 + $recentLift + $monthLift + $dowLift, 4);
+
+        return [
+            'prediction' => round($prediction * $multiplier, 2),
+            'multiplier' => $multiplier,
+        ];
+    }
+
     /**
      * Return all sales history records.
      */
@@ -399,32 +450,28 @@ class SalesAnalyticsController extends Controller
      */
     public function runClassification()
     {
+        $output = '';
+
         try {
-            // Call the artisan command and capture output
-            $exitCode = Artisan::call('ml:classify-products', ['--update' => true]);
-            $output = Artisan::output();
-
-            if ($exitCode === 0) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'ML Sync completed successfully',
-                    'output' => $output
-                ]);
+            $health = Http::timeout(3)->get('http://127.0.0.1:5001/health');
+            if ($health->successful()) {
+                $exitCode = Artisan::call('ml:classify-products');
+                $output = Artisan::output();
+                if ($exitCode !== 0) {
+                    $output .= "\nML sync returned exit code $exitCode.";
+                }
+            } else {
+                $output = "ML server not responding — skipped ML classification. Data refresh continues.";
             }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'ML Sync failed. Check the server output.',
-                'output' => $output
-            ], 500);
-            
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error starting ML sync.',
-                'detail' => $e->getMessage(),
-            ], 500);
+            $output = "ML server unavailable (" . $e->getMessage() . ") — skipped ML classification. Data refresh continues.";
         }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Analytics data refreshed.',
+            'output' => $output,
+        ]);
     }
     public function revenueForecast()
     {
@@ -439,40 +486,88 @@ class SalesAnalyticsController extends Controller
     public function predictRevenue(Request $request)
     {
         $request->validate([
-            'avg_price'   => 'required|numeric',
-            'avg_profit'  => 'required|numeric',
-            'month'       => 'required|numeric',
-            'day_of_week' => 'required|numeric',
-            'brand'       => 'required|string',
-            'part_type'   => 'required|string',
+            'avg_price'    => 'required|numeric',
+            'avg_profit'   => 'required|numeric',
+            'month'        => 'required|numeric',
+            'day_of_week'  => 'required|numeric',
+            'brand'        => 'nullable|string',
+            'part_type'    => 'nullable|string',
+            'product_name' => 'nullable|string',
         ]);
 
-        try {
-            $exitCode = Artisan::call('ml:predict-revenue', [
-                'avg_price'   => $request->avg_price,
-                'avg_profit'  => $request->avg_profit,
-                'brand'       => $request->brand,
-                'part_type'   => $request->part_type,
-                'month'       => (int) $request->month,
-                'day_of_week' => (int) $request->day_of_week,
-                '--json'      => true,
-            ]);
-
-            $output = Artisan::output();
-            $result = json_decode($output, true);
-
-            if ($exitCode === 0 && $result && !isset($result['error'])) {
-                return response()->json($result);
-            }
-
-            $errorMsg = $result['error'] ?? 'Prediction failed';
-            return response()->json(['error' => $errorMsg], 502);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to run prediction. Make sure Python is installed.',
-                'detail' => $e->getMessage(),
-            ], 503);
+        $scriptPath = base_path('ml_predict_revenue.py');
+        if (!file_exists($scriptPath)) {
+            return response()->json(['error' => 'Python prediction script not found.'], 500);
         }
+
+        $payload = [
+            'avg_price'    => (float) $request->avg_price,
+            'avg_profit'   => (float) $request->avg_profit,
+            'brand'        => $request->brand ?? '',
+            'part_type'    => $request->part_type ?? '',
+            'month'        => (int) $request->month,
+            'day_of_week'  => (int) $request->day_of_week,
+            'product_name' => $request->product_name ?? '',
+        ];
+
+        $tmpDir = storage_path('app/ml_predict');
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0777, true);
+        }
+        $tmpFile = tempnam($tmpDir, 'in_');
+        file_put_contents($tmpFile, json_encode($payload));
+
+        $ph = popen(sprintf('python "%s" --json-file "%s" 2>NUL', $scriptPath, $tmpFile), 'r');
+        $output = '';
+        if ($ph) {
+            while (!feof($ph)) {
+                $output .= fread($ph, 8192);
+            }
+            pclose($ph);
+        }
+        @unlink($tmpFile);
+
+        $result = json_decode((string) $output, true);
+        if (!$result || isset($result['error'])) {
+            return response()->json([
+                'error' => $result['error'] ?? 'Prediction script returned no output.',
+            ], 502);
+        }
+
+        if (($result['model_used'] ?? null) === 'random_forest' && trim((string) $payload['product_name']) !== '') {
+            $liveStats = $this->liveProductOrderStats($payload['product_name'], $payload['month'], $payload['day_of_week']);
+            $adjusted = $this->applyLiveRfAdjustment((float) ($result['predicted_revenue_php'] ?? 0), $liveStats);
+            $result['predicted_revenue_php'] = $adjusted['prediction'];
+            $result['live_order_adjustment'] = [
+                'multiplier' => $adjusted['multiplier'],
+                'live_units' => $liveStats['live_units'],
+                'recent_units_14d' => $liveStats['recent_units_14d'],
+                'target_month_units' => $liveStats['target_month_units'],
+                'target_dow_units' => $liveStats['target_dow_units'],
+            ];
+        }
+
+        return response()->json($result);
+    }
+
+    public function revenueModelMetadata()
+    {
+        $scriptPath = base_path('ml_predict_revenue.py');
+        if (!file_exists($scriptPath)) {
+            return response()->json(['error' => 'Python prediction script not found.'], 500);
+        }
+
+        $command = sprintf('python "%s" --metadata 2>NUL', $scriptPath);
+        $output = shell_exec($command);
+        $result = json_decode((string) $output, true);
+
+        if (!$result || isset($result['error'])) {
+            return response()->json([
+                'error' => $result['error'] ?? 'Failed to read Linear Regression model metadata.',
+            ], 502);
+        }
+
+        return response()->json($result);
     }
 
     public function productsWithSalesAvg()
@@ -542,5 +637,115 @@ class SalesAnalyticsController extends Controller
         }
 
         return response()->json(array_values($keyed));
+    }
+
+    public function brandRevenueDaily(Request $request)
+    {
+        $from = $request->query('from');
+        $to = $request->query('to');
+
+        // Collect daily revenue per brand from SalesHistory
+        $histQuery = SalesHistory::select(
+                'brand',
+                'date',
+                DB::raw('SUM(price * quantity) as daily_revenue')
+            )
+            ->whereNotNull('brand')->where('brand', '!=', '')
+            ->when($from, fn ($q) => $q->where('date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('date', '<=', $to))
+            ->groupBy('brand', 'date');
+
+        $historicalDaily = $histQuery->get()
+            ->map(fn ($r) => [
+                'brand' => $r->brand,
+                'date' => $r->date instanceof \Carbon\Carbon ? $r->date->format('Y-m-d') : (string) $r->date,
+                'daily_revenue' => (float) $r->daily_revenue,
+            ]);
+
+        // Collect daily revenue per brand from live orders
+        $liveItems = $this->liveOrderItems();
+        if ($from) {
+            $liveItems = $liveItems->filter(fn ($item) => Carbon::parse($item->created_at)->format('Y-m-d') >= $from);
+        }
+        if ($to) {
+            $liveItems = $liveItems->filter(fn ($item) => Carbon::parse($item->created_at)->format('Y-m-d') <= $to);
+        }
+
+        $liveDaily = $liveItems
+            ->filter(fn ($item) => trim((string) $item->brand) !== '')
+            ->groupBy(fn ($item) => $item->brand . '||' . Carbon::parse($item->created_at)->format('Y-m-d'))
+            ->map(fn ($items, $key) => [
+                'brand' => $items->first()->brand,
+                'date' => explode('||', $key)[1],
+                'daily_revenue' => (float) $items->sum('subtotal'),
+            ])
+            ->values();
+
+        // Merge historical + live, group by brand, compute mean of daily revenues
+        $merged = collect([...$historicalDaily, ...$liveDaily])
+            ->groupBy('brand')
+            ->map(fn ($days) => [
+                'brand' => $days->first()['brand'],
+                'avg_daily_revenue' => round($days->avg('daily_revenue'), 2),
+            ])
+            ->sortByDesc('avg_daily_revenue')
+            ->values();
+
+        return response()->json($merged);
+    }
+
+    public function partTypeRevenueDaily(Request $request)
+    {
+        $from = $request->query('from');
+        $to = $request->query('to');
+
+        // Collect daily revenue per part_type from SalesHistory
+        $histQuery = SalesHistory::select(
+                'part_type',
+                'date',
+                DB::raw('SUM(price * quantity) as daily_revenue')
+            )
+            ->whereNotNull('part_type')->where('part_type', '!=', '')
+            ->when($from, fn ($q) => $q->where('date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('date', '<=', $to))
+            ->groupBy('part_type', 'date');
+
+        $historicalDaily = $histQuery->get()
+            ->map(fn ($r) => [
+                'part_type' => $r->part_type,
+                'date' => $r->date instanceof \Carbon\Carbon ? $r->date->format('Y-m-d') : (string) $r->date,
+                'daily_revenue' => (float) $r->daily_revenue,
+            ]);
+
+        // Collect daily revenue per part_type from live orders
+        $liveItems = $this->liveOrderItems();
+        if ($from) {
+            $liveItems = $liveItems->filter(fn ($item) => Carbon::parse($item->created_at)->format('Y-m-d') >= $from);
+        }
+        if ($to) {
+            $liveItems = $liveItems->filter(fn ($item) => Carbon::parse($item->created_at)->format('Y-m-d') <= $to);
+        }
+
+        $liveDaily = $liveItems
+            ->filter(fn ($item) => trim((string) $item->part_type) !== '')
+            ->groupBy(fn ($item) => $item->part_type . '||' . Carbon::parse($item->created_at)->format('Y-m-d'))
+            ->map(fn ($items, $key) => [
+                'part_type' => $items->first()->part_type,
+                'date' => explode('||', $key)[1],
+                'daily_revenue' => (float) $items->sum('subtotal'),
+            ])
+            ->values();
+
+        // Merge historical + live, group by part_type, compute mean of daily revenues
+        $merged = collect([...$historicalDaily, ...$liveDaily])
+            ->groupBy('part_type')
+            ->map(fn ($days) => [
+                'part_type' => $days->first()['part_type'],
+                'avg_daily_revenue' => round($days->avg('daily_revenue'), 2),
+            ])
+            ->sortByDesc('avg_daily_revenue')
+            ->values();
+
+        return response()->json($merged);
     }
 }
