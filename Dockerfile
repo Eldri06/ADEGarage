@@ -1,8 +1,9 @@
 FROM php:8.4-apache AS backend
 
-
 RUN a2enmod rewrite
+RUN a2dismod mpm_event mpm_worker || true && a2enmod mpm_prefork
 COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
+
 # System deps: zip/unzip for Composer, nodejs for Vite, python3 for ML, supervisor
 RUN apt-get update && apt-get install -y \
 zip unzip libzip-dev nodejs npm python3 python3-pip supervisor \
