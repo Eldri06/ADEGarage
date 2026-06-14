@@ -1,6 +1,9 @@
 FROM php:8.4-apache AS backend
 
-RUN a2dismod mpm_event mpm_worker --force 2>/dev/null; a2enmod mpm_prefork rewrite
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.* && \
+    a2enmod mpm_prefork rewrite && \
+    echo "=== Enabled MPM ===" && a2query -M && \
+    echo "=== Loaded Modules ===" && apache2ctl -M 2>&1 | head -20
 COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
 
 # System deps: zip/unzip for Composer, nodejs for Vite, python3 for ML, supervisor
