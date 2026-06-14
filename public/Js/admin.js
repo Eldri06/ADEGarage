@@ -562,7 +562,7 @@ function renderProductsData() {
 async function loadProductsData(force = false) {
   const productsTable = document.getElementById("productsTable");
   if (productsTable) {
-    productsTable.innerHTML = window.AppLoading?.skeletonRows?.(9, 6) || '';
+    productsTable.innerHTML = window.window.AppLoading?.skeletonRows?.(9, 6) || '';
   }
   try {
     await ensureProductsData(force);
@@ -688,7 +688,7 @@ async function saveProduct() {
   }
 
   try {
-    AppLoading?.setButtonLoading?.(saveButton, true, currentEditingProductId ? 'Updating...' : 'Saving...');
+    window.AppLoading?.setButtonLoading?.(saveButton, true, currentEditingProductId ? 'Updating...' : 'Saving...');
     let url = '/api/products';
     let method = 'POST';
 
@@ -731,7 +731,7 @@ async function saveProduct() {
     console.error('Error saving product:', error);
     showToast("error", "Network connection failed while saving the product. Please try again.");
   } finally {
-    AppLoading?.setButtonLoading?.(saveButton, false);
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
@@ -1440,7 +1440,7 @@ async function initializeTierDistChart() {
 async function loadTopProductsMonthly(month) {
   const table = document.getElementById('topProductsTable');
   if (!table) return;
-  table.innerHTML = window.AppLoading?.skeletonRows?.(7, 5) || '';
+  table.innerHTML = window.window.AppLoading?.skeletonRows?.(7, 5) || '';
 
   try {
     let url = '/api/admin/analytics/top-products-monthly';
@@ -1493,7 +1493,7 @@ async function loadTopProductsMonthly(month) {
 async function loadDeadStock() {
   const table = document.getElementById('deadStockTable');
   if (!table) return;
-  table.innerHTML = window.AppLoading?.skeletonRows?.(7, 4) || '';
+  table.innerHTML = window.window.AppLoading?.skeletonRows?.(7, 4) || '';
 
   try {
     const res = await fetch('/api/admin/analytics/dead-stock');
@@ -1831,7 +1831,7 @@ function exportOrders() {
 async function loadDashboardData() {
   const recentOrdersTable = document.getElementById("recentOrdersTable");
   if (!recentOrdersTable) return;
-  recentOrdersTable.innerHTML = window.AppLoading?.skeletonRows?.(6, 5) || '';
+  recentOrdersTable.innerHTML = window.window.AppLoading?.skeletonRows?.(6, 5) || '';
 
   // Load orders from database if not already loaded
   if (realOrdersData.length === 0) {
@@ -1869,7 +1869,7 @@ function loadInventoryData() {
   if (!inventoryTable) return;
 
   if (!productsData.length) {
-    inventoryTable.innerHTML = window.AppLoading?.skeletonRows?.(6, 5) || '';
+    inventoryTable.innerHTML = window.window.AppLoading?.skeletonRows?.(6, 5) || '';
     return;
   }
 
@@ -2137,20 +2137,20 @@ document.addEventListener("DOMContentLoaded", loadAdminSettings);
 
 async function refreshDashboard() {
   const button = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
-  AppLoading?.setButtonLoading?.(button, true, 'Refreshing...');
+  window.AppLoading?.setButtonLoading?.(button, true, 'Refreshing...');
   await loadOrders(true);
   await Promise.all([loadDashboardData(), loadDashboardStats(), loadNotifications()]);
   showToast("success", "Dashboard refreshed!");
-  AppLoading?.setButtonLoading?.(button, false);
+  window.AppLoading?.setButtonLoading?.(button, false);
 }
 
 async function updateInventory() {
   const button = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
-  AppLoading?.setButtonLoading?.(button, true, 'Updating...');
+  window.AppLoading?.setButtonLoading?.(button, true, 'Updating...');
   await loadProductsData(true);
   loadInventoryData();
   showToast("success", "Inventory updated!");
-  AppLoading?.setButtonLoading?.(button, false);
+  window.AppLoading?.setButtonLoading?.(button, false);
 }
 
 function generateReport() {
@@ -2477,13 +2477,13 @@ async function exportAnalytics() {
 
 function logout() {
   if (confirm("Are you sure you want to logout?")) {
-    AppLoading?.navigateWithLoading?.("/home_landing", "Logging out...");
+    window.AppLoading?.navigateWithLoading?.("/home_landing", "Logging out...");
   }
 }
 
 
 function showToast(type, message) {
-  if (window.AppLoading?.showToast) {
+  if (window.window.AppLoading?.showToast) {
     window.AppLoading.showToast(type, message);
     return;
   }
@@ -2569,7 +2569,7 @@ async function confirmAddStock() {
   }
 
   try {
-    AppLoading?.setButtonLoading?.(button, true, 'Adding...');
+    window.AppLoading?.setButtonLoading?.(button, true, 'Adding...');
     const formData = new FormData();
     formData.append('name', product.name);
     formData.append('category', product.category);
@@ -2611,7 +2611,7 @@ async function confirmAddStock() {
     console.error('Error adding stock:', error);
     showToast("error", "Failed to update stock");
   } finally {
-    AppLoading?.setButtonLoading?.(button, false);
+    window.AppLoading?.setButtonLoading?.(button, false);
   }
 }
 
@@ -2708,10 +2708,10 @@ async function loadOrders(force = false) {
     }
 
     if (ordersGrid) {
-      ordersGrid.innerHTML = window.AppLoading?.skeletonOrderCards?.(4) || '';
+      ordersGrid.innerHTML = window.window.AppLoading?.skeletonOrderCards?.(4) || '';
     }
     if (ordersTableBody) {
-      ordersTableBody.innerHTML = window.AppLoading?.skeletonRows?.(8, 5) || '';
+      ordersTableBody.innerHTML = window.window.AppLoading?.skeletonRows?.(8, 5) || '';
     }
 
     const response = await fetch('/api/orders', { adeSilent: true });
@@ -2943,7 +2943,7 @@ async function submitOrderStatusUpdate(event) {
     return;
   }
 
-  AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
+  window.AppLoading?.setButtonLoading?.(saveButton, true, 'Saving...');
 
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -2973,7 +2973,7 @@ async function submitOrderStatusUpdate(event) {
     console.error('Error updating order status:', error);
     showToast("error", "An error occurred while updating order status");
   } finally {
-    AppLoading?.setButtonLoading?.(saveButton, false);
+    window.AppLoading?.setButtonLoading?.(saveButton, false);
   }
 }
 
@@ -3283,7 +3283,7 @@ async function syncMLData() {
   const btn = document.getElementById('btnSyncMl');
   if (!btn || btn.disabled) return;
 
-  AppLoading?.setButtonLoading?.(btn, true, 'Syncing...');
+  window.AppLoading?.setButtonLoading?.(btn, true, 'Syncing...');
 
   try {
     const response = await fetch('/api/admin/ml/sync', {
@@ -3309,7 +3309,7 @@ async function syncMLData() {
     console.error('Critical failure attempting to trigger the Sync handler:', err);
     showToast('error', 'Network connection failed while refreshing smart suggestions.');
   } finally {
-    AppLoading?.setButtonLoading?.(btn, false);
+    window.AppLoading?.setButtonLoading?.(btn, false);
   }
 }
 

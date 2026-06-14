@@ -165,19 +165,20 @@ let currentQuantity = 1;
 
     // Provide direct loading action for product card buttons
     window.clickProductCardAction = function clickProductCardAction(btn, mode) {
+        console.log('clickProductCardAction invoked', {mode, btn});
       if (typeof event !== 'undefined') {
         event.preventDefault();
         event.stopPropagation();
       }
       const card = btn.closest('.product-card');
       const productItem = btn.closest('.product-item');
-      AppLoading?.setButtonLoading?.(btn, true, mode === 'buyNow' ? 'Opening...' : 'Adding...');
+      window.AppLoading?.setButtonLoading?.(btn, true, mode === 'buyNow' ? 'Opening...' : 'Adding...');
       
       setTimeout(() => {
         if (typeof window.openProductModal === 'function') {
           window.openProductModal(card, productItem, mode);
         }
-        AppLoading?.setButtonLoading?.(btn, false);
+        window.AppLoading?.setButtonLoading?.(btn, false);
       }, 150);
     };
 
@@ -343,14 +344,15 @@ let currentQuantity = 1;
     }
 
     window.handleBuyNow = async function handleBuyNow() {
+        console.log('handleBuyNow invoked', {modalMode, currentQuantity});
       if (isCartActionPending) return;
       isCartActionPending = true;
       const buyNowBtn = document.querySelector('.modal-action-btn.buy-now-action');
-      AppLoading?.setButtonLoading?.(buyNowBtn, true, 'Processing...');
+      window.AppLoading?.setButtonLoading?.(buyNowBtn, true, 'Processing...');
 
-      const totalPricePerItem = currentProductData.price; 
+      const totalPricePerItem = currentProductData.price;
       const totalCost = totalPricePerItem * currentQuantity;
-      
+
       try {
         // Add to database cart if product ID exists
         if (currentProductData.id && typeof addToCart === 'function') {
@@ -379,12 +381,15 @@ let currentQuantity = 1;
           closeModal();
           await showCheckoutPage();
           updateCartDisplay();
-          
+
           showToast(`Proceeding to checkout with ${currentQuantity}x ${currentProductData.title}`);
         }
+      } catch (e) {
+        console.error('Error in handleBuyNow:', e);
+        showToast('error', 'Failed to process Buy Now. Please try again.');
       } finally {
         isCartActionPending = false;
-        AppLoading?.setButtonLoading?.(buyNowBtn, false);
+        window.AppLoading?.setButtonLoading?.(buyNowBtn, false);
       }
     }
 
@@ -392,47 +397,51 @@ let currentQuantity = 1;
       if (isCartActionPending) return;
       isCartActionPending = true;
       const addCartBtn = document.querySelector('.modal-action-btn.add-cart-action');
-      AppLoading?.setButtonLoading?.(addCartBtn, true, 'Adding...');
+      window.AppLoading?.setButtonLoading?.(addCartBtn, true, 'Adding...');
 
-      const totalPricePerItem = currentProductData.price; 
+      const totalPricePerItem = currentProductData.price;
       const totalCost = totalPricePerItem * currentQuantity;
-      
-      // Add to database cart if product ID exists
-      if (currentProductData.id && typeof addToCart === 'function') {
-        const result = await addToCart(currentProductData.id, currentQuantity, { reload: false });
-        if (!result?.success) {
-          isCartActionPending = false;
-          AppLoading?.setButtonLoading?.(addCartBtn, false);
-          return;
-        }
-      } else {
-        // Fallback to local cart if no product ID
-        const cartItem = {
-          id: Date.now(),
-          name: currentProductData.title,
-          price: totalPricePerItem,
-          quantity: currentQuantity,
-          image: document.getElementById('modalProductImage').src,
-          variations: {
-            size: selectedVariations.size.value,
-            material: selectedVariations.material.value,
-            color: selectedVariations.color.value
+
+      try {
+        // Add to database cart if product ID exists
+        if (currentProductData.id && typeof addToCart === 'function') {
+          const result = await addToCart(currentProductData.id, currentQuantity, { reload: false });
+          if (!result?.success) {
+            showToast('error', 'Failed to add item to cart. Please try again.');
+            // Proceed to close modal and reset state
           }
-        };
+        } else {
+          // Fallback to local cart if no product ID
+          const cartItem = {
+            id: Date.now(),
+            name: currentProductData.title,
+            price: totalPricePerItem,
+            quantity: currentQuantity,
+            image: document.getElementById('modalProductImage').src,
+            variations: {
+              size: selectedVariations.size.value,
+              material: selectedVariations.material.value,
+              color: selectedVariations.color.value
+            }
+          };
 
-        cartItems.push(cartItem);
+          cartItems.push(cartItem);
 
-        const cartCountSpan = document.getElementById('cartCount');
-        const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-        cartCountSpan.textContent = totalItems;
+          const cartCountSpan = document.getElementById('cartCount');
+          const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+          cartCountSpan.textContent = totalItems;
 
-        updateCartDisplay();
-        showToast(`Added ${currentQuantity}x ${currentProductData.title} to cart - ₱${totalCost.toLocaleString()}`);
+          updateCartDisplay();
+          showToast(`Added ${currentQuantity}x ${currentProductData.title} to cart - ₱${totalCost.toLocaleString()}`);
+        }
+        closeModal();
+      } catch (e) {
+        console.error('Error in handleAddToCart:', e);
+        showToast('error', 'Failed to add to cart. Please try again.');
+      } finally {
+        isCartActionPending = false;
+        window.AppLoading?.setButtonLoading?.(addCartBtn, false);
       }
-      
-      closeModal();
-      isCartActionPending = false;
-      AppLoading?.setButtonLoading?.(addCartBtn, false);
     }
 
     function showToast(type, message){
@@ -440,7 +449,7 @@ let currentQuantity = 1;
         message = type;
         type = 'info';
       }
-      if (window.AppLoading?.showToast) {
+      if (window.window.AppLoading?.showToast) {
         window.AppLoading.showToast(type, message);
         return;
       }
@@ -481,7 +490,7 @@ let currentQuantity = 1;
     });
 
     window.showCheckoutPage = async function showCheckoutPage() {
-      AppLoading?.showPageLoader?.('Opening checkout...');
+      window.AppLoading?.showPageLoader?.('Opening checkout...');
       document.getElementById('shopPage').style.display = 'none';
       document.getElementById('checkoutPage').classList.add('active');
       
@@ -496,16 +505,16 @@ let currentQuantity = 1;
       }
       
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      AppLoading?.hidePageLoader?.();
+      window.AppLoading?.hidePageLoader?.();
     }
 
     window.goToStep = async function goToStep(stepNum) {
       const clickedButton = typeof event !== 'undefined' ? event?.target?.closest?.('button') : null;
-      AppLoading?.setButtonLoading?.(clickedButton, true, 'Loading...');
+      window.AppLoading?.setButtonLoading?.(clickedButton, true, 'Loading...');
       if (currentStep === 3 && stepNum > 3) {
         const form = document.getElementById('checkoutForm');
         if (!form.checkValidity()) {
-          AppLoading?.setButtonLoading?.(clickedButton, false);
+          window.AppLoading?.setButtonLoading?.(clickedButton, false);
           form.reportValidity();
           return;
         }
@@ -532,7 +541,7 @@ let currentQuantity = 1;
       }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      AppLoading?.setButtonLoading?.(clickedButton, false);
+      window.AppLoading?.setButtonLoading?.(clickedButton, false);
     }
 
     function updateStepperUI() {
@@ -764,7 +773,7 @@ let currentQuantity = 1;
           form.reportValidity();
           return;
         }
-        AppLoading?.setButtonLoading?.(placeOrderBtn, true, 'Placing order...');
+        window.AppLoading?.setButtonLoading?.(placeOrderBtn, true, 'Placing order...');
 
         const orderData = {
           customer_name: form.fullName.value,
@@ -811,7 +820,7 @@ let currentQuantity = 1;
         console.error('Error placing order:', error);
         showToast('error', 'Network connection failed while placing the order. Please try again.');
       } finally {
-        AppLoading?.setButtonLoading?.(placeOrderBtn, false);
+        window.AppLoading?.setButtonLoading?.(placeOrderBtn, false);
       }
     }
 

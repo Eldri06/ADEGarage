@@ -39,7 +39,7 @@
           <i class="fas fa-cog"></i> Settings
         </li>
         <li>
-          <a href="{{route('logout')}}"onclick="event.preventDefault(); AppLoading?.showPageLoader('Logging out...'); document.getElementById('logout-form').submit();">
+          <a href="{{route('logout')}}"onclick="event.preventDefault(); window.AppLoading?.showPageLoader('Logging out...'); document.getElementById('logout-form').submit();">
          <i class="fas fa-sign-out-alt" class="btn-logout" action="/logout" method="POST"></i> Log Out </a>
          <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">@csrf</form>
         </li>

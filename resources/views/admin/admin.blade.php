@@ -19,6 +19,8 @@
   <link rel="stylesheet" href="{{url('Css/admin.css')}}"> 
 
 </head>
+  <script src="{{url('Js/loading.js')}}?v={{time()}}"></script>
+  <script src="{{url('Js/admin.js')}}?v={{time()}}"></script>
 
 <body class="admin-body">
 
