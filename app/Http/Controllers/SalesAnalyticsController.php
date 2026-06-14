@@ -426,4 +426,47 @@ class SalesAnalyticsController extends Controller
             ], 500);
         }
     }
+    public function demandForecast()
+    {
+        $products = Product::whereNotNull('demand_score')
+            ->where('demand_score', '>', 0)
+            ->orderBy('demand_score', 'desc')
+            ->take(20)
+            ->get();
+        return response()->json($products);
+    }
+
+    public function predictDemand(Request $request)
+    {
+        $request->validate([
+            'avg_price'   => 'required|numeric',
+            'avg_profit'  => 'required|numeric',
+            'month'       => 'required|numeric',
+            'day_of_week' => 'required|numeric',
+            'brand'       => 'required|string',
+            'part_type'   => 'required|string',
+        ]);
+
+        try {
+            $response = Http::timeout(10)->post('http://127.0.0.1:5001/predict/demand', [
+                'avg_price'   => $request->avg_price,
+                'avg_profit'  => $request->avg_profit,
+                'month'       => $request->month,
+                'day_of_week' => $request->day_of_week,
+                'brand'       => $request->brand,
+                'part_type'   => $request->part_type,
+            ]);
+
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+
+            return response()->json(['error' => 'ML service returned an error'], 502);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'ML service unavailable. Make sure ml_server.py is running.',
+                'detail' => $e->getMessage(),
+            ], 503);
+        }
+    }
 }

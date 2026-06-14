@@ -8,27 +8,35 @@
 
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <meta name="csrf-token" content="{{ csrf_token() }}">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 
-  <title>ADE GARAGE</title>
+<title>ADE GARAGE</title>
 
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="{{url('Css/admin.css')}}"> 
+<link rel="stylesheet" href="{{url('Css/admin.css')}}">
+<link rel="stylesheet" href="{{url('Css/loading.css')}}">
 
 </head>
-  <script src="{{url('Js/loading.js')}}?v={{time()}}"></script>
-  <script src="{{url('Js/admin.js')}}?v={{time()}}"></script>
 
 <body class="admin-body">
 
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
+<div id="appPageLoader" style="
+    position:fixed;inset:0;z-index:9999;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(7,9,12,0.92);backdrop-filter:blur(6px);
+  ">
+    <div class="app-page-loader__panel">
+      <span class="app-spinner" aria-hidden="true"></span>
+      <span class="app-page-loader__text">Loading dashboard...</span>
+    </div>
+  </div>
 
-
-  <aside class="admin-sidebar" id="adminSidebar">
+  <aside class="admin-sidebar" id="adminSidebar"></aside>
 
     <div class="sidebar-header">
 
@@ -836,6 +844,36 @@
 
         </div>
 
+      </div>
+
+      <!-- Row 5: Demand Forecast -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Top 10 Products by Demand Score</h3>
+          </div>
+          <div class="chart-placeholder">
+            <canvas id="demandForecastChart"></canvas>
+          </div>
+        </div>
+
+        <div class="data-card" style="flex: 1; padding: 20px;">
+          <div class="card-header">
+            <h3><i class="fas fa-calculator" style="color: #1eff8e; margin-right: 8px;"></i>Predict Demand Score</h3>
+          </div>
+          <form class="settings-form" id="predictDemandForm" onsubmit="handlePredictDemand(event)">
+            <div class="form-group"><label>Product Name (Optional)</label><input type="text" id="pd_name" class="form-control" placeholder="e.g. Brake Pads"></div>
+            <div class="form-group"><label>Average Price</label><input type="number" id="pd_price" class="form-control" required step="0.01"></div>
+            <div class="form-group"><label>Average Profit</label><input type="number" id="pd_profit" class="form-control" required step="0.01"></div>
+            <div class="form-group"><label>Brand</label><input type="text" id="pd_brand" class="form-control" required placeholder="e.g. Honda"></div>
+            <div class="form-group"><label>Part Type</label><input type="text" id="pd_part_type" class="form-control" required placeholder="e.g. Brake"></div>
+            <button type="submit" class="btn-action btn-primary" style="margin-top: 10px; width: 100%;">Predict Demand</button>
+          </form>
+          <div id="demandPredictionResult" style="margin-top: 20px; padding: 15px; background: rgba(30, 224, 255, 0.1); border: 1px solid rgba(30, 224, 255, 0.3); border-radius: 8px; display: none;">
+            <h4 style="margin:0 0 10px 0; color:#1ee0ff;">Predicted Demand Score</h4>
+            <div style="font-size: 24px; font-weight: bold; color: #fff;" id="demandScoreValue">0.00</div>
+          </div>
+        </div>
       </div>
 
     </section>

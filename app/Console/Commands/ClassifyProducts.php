@@ -137,7 +137,7 @@ class ClassifyProducts extends Command
             ];
         })->values()->toArray();
 
-        $this->info('Sending batch prediction requests to ML server...');
+        $this->info('Sending batch prediction requests to ML server for Tier Classification...');
 
         try {
             // Predict Tiers (K-Means)
@@ -145,21 +145,12 @@ class ClassifyProducts extends Command
                 'products' => $batchPayload,
             ]);
 
-            // Predict Demand (Linear Regression)
-            $demandResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/demand/batch', [
-                'products' => $batchPayload,
-            ]);
-
-            if (!$tierResponse->successful() || !$demandResponse->successful()) {
+            if (!$tierResponse->successful()) {
                 $this->error('ML server returned an error.');
                 return 1;
             }
 
             $tierResults = $tierResponse->json('results', []);
-            $demandResults = $demandResponse->json('results', []);
-            
-            // Map demand results by ID for easy lookup
-            $demandMap = collect($demandResults)->pluck('demand_score', 'id');
         } catch (\Exception $e) {
             $this->error('Error communicating with ML server: ' . $e->getMessage());
             return 1;
@@ -178,7 +169,6 @@ class ClassifyProducts extends Command
             if ($idx !== null && isset($products[$idx])) {
                 $product = $products[$idx];
                 $tierCounts[$tier] = ($tierCounts[$tier] ?? 0) + 1;
-                $demandScore = $demandMap[$idx] ?? 0;
 
                 $classifiedData[] = [
                     'product'      => $product->product,
@@ -188,7 +178,6 @@ class ClassifyProducts extends Command
                     'tier'         => $tier,
                     'label'        => $result['label'] ?? $tier,
                     'cluster'      => $result['cluster'] ?? null,
-                    'demand_score' => $demandScore,
                 ];
             }
 
@@ -225,13 +214,12 @@ class ClassifyProducts extends Command
             return 0;
         }
 
-        $this->info('Updating database...');
+        $this->info('Updating database with ML Tiers...');
         $updateBar = $this->output->createProgressBar(count($classifiedData));
         $updatedCount = 0;
 
         foreach ($classifiedData as $data) {
             // Find and update or create products based on sales_histories aggregation
-            // Look up product by name from our dataset. Insert with generic info and set ML Tier.
             $productModel = Product::updateOrCreate(
                 ['name' => $data['product']],
                 [
@@ -240,7 +228,6 @@ class ClassifyProducts extends Command
                     'price' => $data['avg_price'] ?? 0,
                     'stock' => 50, // Default stock for newly synced products
                     'ml_tier' => $data['tier'],
-                    'demand_score' => $data['demand_score'] ?? 0,
                 ]
             );
 
@@ -250,6 +237,31 @@ class ClassifyProducts extends Command
             $updateBar->advance();
         }
         $updateBar->finish();
+        $this->newLine(2);
+
+        $this->info('Predicting demand scores per product...');
+        $demandBar = $this->output->createProgressBar(count($batchPayload));
+        
+        foreach ($batchPayload as $payload) {
+            try {
+                $demandPayload = array_merge($payload, [
+                    'month' => date('n'),
+                    'day_of_week' => date('N') - 1,
+                ]);
+                $demandResponse = Http::timeout(30)->post('http://127.0.0.1:5001/predict/demand', $demandPayload);
+                if ($demandResponse->successful()) {
+                    $demandScore = $demandResponse->json('predicted_daily_revenue_php', 0);
+                    Product::updateOrCreate(
+                        ['name' => $payload['name']],
+                        ['demand_score' => $demandScore]
+                    );
+                }
+            } catch (\Exception $e) {
+                // Suppress per-product demand errors so the loop continues
+            }
+            $demandBar->advance();
+        }
+        $demandBar->finish();
 
         $this->newLine(2);
         $this->info("Updated {$updatedCount} products in the database.");

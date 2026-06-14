@@ -125,6 +125,7 @@ let liveMessages = [];
 let salesChart = null;
 let revenueChart = null;
 let customerChart = null;
+let demandChart = null;
 let nextProductId = 9; 
 let currentAdminSection = "dashboard";
 let dashboardSummaryData = {};
@@ -169,7 +170,7 @@ function setProductImagePreview(imageUrl = "") {
 }
 
 function destroyAnalyticsCharts() {
-  [revenueChart, partTypeChart, brandMarginsChart, tierDistChart].forEach((chartInstance) => {
+  [revenueChart, partTypeChart, brandMarginsChart, tierDistChart, demandChart].forEach((chartInstance) => {
     if (chartInstance && typeof chartInstance.destroy === "function") {
       chartInstance.destroy();
     }
@@ -179,6 +180,7 @@ function destroyAnalyticsCharts() {
   partTypeChart = null;
   brandMarginsChart = null;
   tierDistChart = null;
+  demandChart = null;
 }
 
 async function refreshAdminSection(sectionName = getActiveAdminSection()) {
@@ -327,16 +329,21 @@ function populateAdminProductFilters() {
       .join('');
   }
 }
-
-
 document.addEventListener("DOMContentLoaded", async () => {
+  window.AppLoading?.showPageLoader?.('Loading dashboard...');
   initializeSidebar();
   initializeAdminSearch();
   initializeNotifications();
   initializeMessages();
-  await refreshAdminSection("dashboard");
+  try {
+    await refreshAdminSection("dashboard");
+  } finally {
+    window.AppLoading?.hidePageLoader?.();
+    // hide the hardcoded loader too
+    const el = document.getElementById('appPageLoader');
+    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 320); }
+  }
 });
-
 
 function initializeSidebar() {
   const navItems = document.querySelectorAll(".nav-item[data-section]");
@@ -370,33 +377,24 @@ function initializeSidebar() {
 }
 
 async function switchSection(sectionName) {
-  // Show loading overlay while switching sections
-  if (window.AppLoading && typeof window.AppLoading.showPageLoader === "function") {
-    window.AppLoading.showPageLoader?.(`Loading ${sectionName}...`);
-  }
+  window.AppLoading?.showPageLoader?.(`Loading ${sectionName}...`);
 
   const sections = document.querySelectorAll(".admin-section");
   sections.forEach((section) => section.classList.remove("active"));
 
   const targetSection = document.getElementById(`section-${sectionName}`);
-  if (targetSection) {
-    targetSection.classList.add("active");
-  }
+  if (targetSection) targetSection.classList.add("active");
 
-  // Update nav items
   const navItems = document.querySelectorAll(".nav-item");
   navItems.forEach((item) => item.classList.remove("active"));
   const activeNav = document.querySelector(`[data-section="${sectionName}"]`);
-  if (activeNav) {
-    activeNav.classList.add("active");
-  }
+  if (activeNav) activeNav.classList.add("active");
 
-  await refreshAdminSection(sectionName);
-  applyAdminSearch();
-
-  // Hide loading overlay after content is ready
-  if (window.AppLoading && typeof window.AppLoading.hidePageLoader === "function") {
-    window.AppLoading.hidePageLoader?.();
+  try {
+    await refreshAdminSection(sectionName);
+    applyAdminSearch();
+  } finally {
+    window.AppLoading?.hidePageLoader?.();
   }
 }
 
@@ -1161,7 +1159,8 @@ async function initializeCharts() {
     initializeRevenueChart(),
     initializePartTypeChart(),
     initializeBrandMarginsChart(),
-    initializeTierDistChart()
+    initializeTierDistChart(),
+    initializeDemandChart()
   ]);
 }
 
@@ -1435,6 +1434,125 @@ async function initializeTierDistChart() {
     console.error('Error loading tier dist chart:', e);
   }
 }
+
+async function initializeDemandChart() {
+  const ctx = document.getElementById('demandForecastChart');
+  if (!ctx) return;
+
+  try {
+    const res = await fetch('/api/admin/analytics/demand');
+    let data = await res.json();
+    
+    // Safety check just in case endpoint fails or empty
+    if (!Array.isArray(data)) return;
+
+    data = data.slice(0, 10); // Limit to top 10
+    const labels = data.map(d => String(d.name || d.product_name).substring(0, 15) + '...');
+    const values = data.map(d => parseFloat(d.demand_score || 0).toFixed(2));
+    
+    demandChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Estimated Daily Revenue (PHP)',
+          data: values,
+          backgroundColor: chartColors.teal,
+          borderWidth: 0,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) label += ': ';
+                if (context.parsed.x !== null) {
+                  label += '₱' + context.parsed.x.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: Object.assign({ beginAtZero: true }, chartGridOptions()),
+          y: chartGridOptions()
+        }
+      }
+    });
+
+  } catch (e) {
+    console.error('Error loading demand forecast chart:', e);
+  }
+}
+
+async function handlePredictDemand(event) {
+  event.preventDefault();
+  
+  const form = document.getElementById('predictDemandForm');
+  const btn = form.querySelector('button[type="submit"]');
+  const resultDiv = document.getElementById('demandPredictionResult');
+  const scoreVal = document.getElementById('demandScoreValue');
+  
+  if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
+    window.AppLoading.setButtonLoading(btn, true, 'Predicting...');
+  } else {
+    btn.disabled = true;
+    btn.textContent = 'Predicting...';
+  }
+  
+  let now = new Date();
+  
+  const payload = {
+    avg_price: parseFloat(document.getElementById('pd_price').value),
+    avg_profit: parseFloat(document.getElementById('pd_profit').value),
+    month: now.getMonth() + 1, // 1-12
+    day_of_week: now.getDay() === 0 ? 6 : now.getDay() - 1, // 0=Mon, 6=Sun
+    brand: document.getElementById('pd_brand').value,
+    part_type: document.getElementById('pd_part_type').value
+  };
+
+  try {
+    const res = await fetch('/api/admin/ml/predict-demand', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    if (res.ok && data.predicted_daily_revenue_php !== undefined) {
+      let revenueVal = parseFloat(data.predicted_daily_revenue_php);
+      // Format as ₱X,XXX.XX
+      scoreVal.textContent = '₱' + revenueVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      resultDiv.style.display = 'block';
+    } else {
+      alert('Error predicting demand: ' + (data.error || 'Unknown error'));
+      resultDiv.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Prediction error:', error);
+    alert('Failed to reach server. Ensure ML server is running.');
+  } finally {
+    if (window.AppLoading && typeof window.AppLoading.setButtonLoading === 'function') {
+      window.AppLoading.setButtonLoading(btn, false);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Predict Demand';
+    }
+  }
+}
+
+
 
 // ---- Top Products Monthly (table) ----
 async function loadTopProductsMonthly(month) {

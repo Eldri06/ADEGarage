@@ -146,10 +146,10 @@ def predict_tier_batch():
 @app.route('/predict/demand', methods=['POST'])
 def predict_demand():
     """
-    Predict demand score using Linear Regression.
+    Predict daily revenue using Linear Regression.
 
-    Expects JSON body with feature values matching the trained feature columns.
-    Returns:  { "demand_score": 12.5 }
+    Expects JSON body: { "avg_price": 50, "avg_profit": 10, "month": 6, "day_of_week": 1, "brand": "Honda", "part_type": "Brake" }
+    Returns:  { "demand_score": 1250.50 }
     """
     if linreg_model is None:
         return jsonify({'error': 'Linear Regression model not loaded'}), 503
@@ -157,21 +157,41 @@ def predict_demand():
     data = request.get_json(force=True)
 
     try:
-        # Build feature array in the correct order
+        feature_values = []
         if linreg_features is not None:
-            feature_values = [float(data.get(f, 0)) for f in linreg_features]
+            for f in linreg_features:
+                if f == 'month':
+                    val = float(data.get('month', 1))
+                elif f == 'day_of_week':
+                    val = float(data.get('day_of_week', 0))
+                elif f == 'log_avg_price':
+                    val = np.log1p(float(data.get('avg_price', 0)))
+                elif f == 'log_avg_profit':
+                    val = np.log1p(float(data.get('avg_profit', 0)))
+                elif f.startswith('brand_'):
+                    brand = f.replace('brand_', '')
+                    p_brand = str(data.get('brand', '')).strip()
+                    val = 1.0 if p_brand.lower() == brand.lower() else 0.0
+                elif f.startswith('part_type_'):
+                    ptype = f.replace('part_type_', '')
+                    p_ptype = str(data.get('part_type', '')).strip()
+                    val = 1.0 if p_ptype.lower() == ptype.lower() else 0.0
+                else:
+                    val = float(data.get(f, 0))
+                feature_values.append(val)
         else:
-            # Fallback: assume price, quantity, profit
+            # Fallback
             feature_values = [
-                float(data.get('price', 0)),
-                float(data.get('quantity', 0)),
-                float(data.get('profit', 0)),
+                float(data.get('avg_price', 0)),
+                float(data.get('total_qty', 0)),
+                float(data.get('avg_profit', 0)),
             ]
 
         features = np.array([feature_values])
-        prediction = float(linreg_model.predict(features)[0])
+        prediction_log = float(linreg_model.predict(features)[0])
+        predicted_daily_revenue_php = np.expm1(prediction_log)
 
-        return jsonify({'demand_score': round(prediction, 2)})
+        return jsonify({'predicted_daily_revenue_php': round(predicted_daily_revenue_php, 2)})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
