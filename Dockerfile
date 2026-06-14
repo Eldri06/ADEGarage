@@ -1,7 +1,9 @@
 FROM php:8.4-apache AS backend
 
-RUN a2enmod rewrite
 
+RUN a2enmod rewrite && \
+    sed -i 's|/var/www/html|/app/public|g' /etc/apache2/sites-available/000-default.conf && \
+    sed -i 's|/var/www/html|/app/public|g' /etc/apache2/apache2.conf
 # System deps: zip/unzip for Composer, nodejs for Vite, python3 for ML, supervisor
 RUN apt-get update && apt-get install -y \
 zip unzip libzip-dev nodejs npm python3 python3-pip supervisor \
