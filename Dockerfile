@@ -18,7 +18,7 @@ COPY . .
 
 # Laravel setup
 RUN composer install --no-dev --optimize-autoloader
-RUN npm ci && npm run build
+RUN npm install && npm run build
 RUN php artisan storage:link || true
 
 # Python ML deps
