@@ -473,8 +473,6 @@ class UserController extends Controller
     {
         $code = (string) random_int(100000, 999999);
 
-        Mail::to($email)->send(new SignupVerificationCodeMail($code));
-
         $request->session()->put('pending_signup_email', [
             'email' => $email,
             'code_hash' => Hash::make($code),
@@ -483,7 +481,22 @@ class UserController extends Controller
             'verified_at' => null,
         ]);
 
-        Log::info('Signup verification code sent.', ['email' => $email]);
+        try {
+            Mail::to($email)->send(new SignupVerificationCodeMail($code));
+            Log::info('Signup verification code sent.', ['email' => $email]);
+        } catch (\Throwable $e) {
+            Log::warning('Signup verification code email delivery failed, but code stored in session.', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            if (config('app.debug')) {
+                Log::warning('Verification code for debugging', [
+                    'email' => $email,
+                    'code' => $code,
+                ]);
+            }
+        }
     }
 
     private function sendWelcomeEmail(User $user, string $source): void

@@ -361,8 +361,8 @@
           signupEmailForm.hidden = true;
         }
 
-        setAuthAlert(payload.message || `Verification code sent to ${payload.email || signupEmail}`, 'success');
-        setVerifyMessage(payload.message || 'Check your email for the latest verification code.', 'success');
+        setAuthAlert((payload.message || `Verification code sent to ${payload.email || signupEmail}`) + ' (check spam if not found)', 'success');
+        setVerifyMessage((payload.message || 'Check your email (including spam) for the verification code.'), 'success');
         activateTab('verify');
         startResendCooldown();
         document.getElementById('verifyCode')?.focus();
@@ -657,8 +657,8 @@
         const message = extractErrorMessage(payload);
 
         if (response.ok && payload.success) {
-          setAuthAlert(payload.message || 'We sent a new verification code.', 'success');
-          setVerifyMessage(payload.message || 'We sent a new verification code.', 'success');
+          setAuthAlert((payload.message || 'We sent a new verification code.') + ' (check spam if not found)', 'success');
+          setVerifyMessage((payload.message || 'We sent a new verification code.') + ' (check spam)', 'success');
           startResendCooldown();
           document.getElementById('verifyCode')?.focus();
           return;

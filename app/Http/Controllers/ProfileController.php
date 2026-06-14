@@ -57,7 +57,7 @@ class ProfileController extends Controller
 
         $user->update($updateData);
 
-        return redirect()->route('customer_home')->with('success', 'Profile updated successfully!');
+        return redirect()->route('profile.show')->with('success', 'Profile updated successfully!');
     }
 
     /**
