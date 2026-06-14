@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 zip unzip libzip-dev libpq-dev nodejs npm python3 python3-pip supervisor \
     && apt-get clean
 
-# PHP extensions — added pdo_pgsql for Supabase
+# PHP extensions
 RUN docker-php-ext-install pdo_mysql pdo_pgsql bcmath zip
 
 # Composer
@@ -19,6 +19,12 @@ COPY . .
 # Laravel setup
 RUN composer install --no-dev --optimize-autoloader
 RUN npm install && npm run build
+
+# Clear any cached config so Railway env vars are always used at runtime
+RUN php artisan config:clear || true
+RUN php artisan cache:clear || true
+RUN php artisan route:clear || true
+RUN php artisan view:clear || true
 
 # Fix permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache && \
