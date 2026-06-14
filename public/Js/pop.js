@@ -344,7 +344,8 @@
       const payload = await response.json().catch(() => ({}));
 
       if (response.ok && payload.success && payload.redirect) {
-        window.location.assign(payload.redirect);
+        window.location.assign(pendingRedirect || payload.redirect);
+        pendingRedirect = null;
         return;
       }
 
@@ -523,6 +524,30 @@
       } finally {
         setButtonLoading(button, 'SENDING...', false);
       }
+    });
+
+    let pendingRedirect = null;
+
+    function isAuthenticated() {
+      const meta = document.querySelector('meta[name="user-authenticated"]');
+      return meta?.content === 'true';
+    }
+
+    function requireAuth(event, href) {
+      if (!isAuthenticated()) {
+        event.preventDefault();
+        pendingRedirect = href;
+        setAuthAlert('Please log in or sign up to continue.');
+        openAuth('login');
+      }
+    }
+
+    document.getElementById('shopNowBtn')?.addEventListener('click', function (e) {
+      requireAuth(e, this.href);
+    });
+
+    document.getElementById('bookServiceBtn')?.addEventListener('click', function (e) {
+      requireAuth(e, this.href);
     });
 
     if (homeLoginBtn) {

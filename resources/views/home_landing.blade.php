@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="user-authenticated" content="{{ Auth::check() ? 'true' : 'false' }}">
   <title>ADE Garage</title>
 
   <!-- Google Fonts -->
@@ -50,8 +51,8 @@
           GARAGE
         </h1>
         <div class="d-flex flex-wrap gap-3">
-          <a href="{{ route('customer_home') }}" class="btn cta" data-loading-link data-loading-message="Opening shop...">Shop Now</a>
-          <a href="{{ route('customer_home') }}#service" class="btn cta secondary" data-loading-link data-loading-message="Opening service booking...">Book Service</a>
+          <a href="{{ route('customer_home') }}" class="btn cta" id="shopNowBtn">Shop Now</a>
+          <a href="{{ route('customer_home') }}#service" class="btn cta secondary" id="bookServiceBtn">Book Service</a>
         </div>
       </div>
       <div class="col-lg-5">
