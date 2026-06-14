@@ -1,5 +1,5 @@
 # ---- PHP + Node ----
-    FROM php:8.2-apache AS backend
+    FROM php:8.4-apache AS backend
 
     RUN a2enmod rewrite
     
