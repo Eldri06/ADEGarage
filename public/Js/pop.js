@@ -5,6 +5,7 @@
   let releaseFocusTrapHandler = null;
   let lastFocusedElement = null;
   let resendCooldownTimer = null;
+  let pendingRedirect = null; 
 
   function getElements() {
     return {
@@ -338,6 +339,8 @@
         headers: {
           Accept: 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
+           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          
         },
       });
 
@@ -526,7 +529,7 @@
       }
     });
 
-    let pendingRedirect = null;
+   
 
     function isAuthenticated() {
       const meta = document.querySelector('meta[name="user-authenticated"]');
@@ -651,6 +654,7 @@
           headers: {
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
           },
         });
         const payload = await response.json().catch(() => ({}));
