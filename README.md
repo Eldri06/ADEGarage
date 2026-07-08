@@ -29,7 +29,7 @@ A full-stack web application built with Laravel, featuring product browsing, car
 
 **🛒 Cart System**
 - Add, update, and remove cart items
-- Works for both guests and logged-in users
+- Works for guests and logged-in users
 - Full cart clear functionality
 
 **📦 Order Management**
