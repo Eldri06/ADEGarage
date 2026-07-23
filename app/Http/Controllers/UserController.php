@@ -16,7 +16,8 @@ use Illuminate\Support\Str;
 class UserController extends Controller
 {
     private const SIGNUP_CODE_TTL_MINUTES = 10;
-    private const SIGNUP_RESEND_COOLDOWN_SECONDS = 60;`r`n    private const MAX_VERIFICATION_ATTEMPTS = 5;
+    private const SIGNUP_RESEND_COOLDOWN_SECONDS = 60;
+    private const MAX_VERIFICATION_ATTEMPTS = 5;
 
     public function sendSignupCode(Request $request)
     {
