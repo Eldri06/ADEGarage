@@ -36,6 +36,7 @@ RUN pip3 install -r requirements.txt --break-system-packages 2>/dev/null || \
 
 # Supervisor config
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/start.sh /app/docker/start.sh
 
 EXPOSE 80 5001
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["bash", "/app/docker/start.sh"]
