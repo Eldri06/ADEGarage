@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 class UserController extends Controller
 {
     private const SIGNUP_CODE_TTL_MINUTES = 10;
-    private const SIGNUP_RESEND_COOLDOWN_SECONDS = 60;
+    private const SIGNUP_RESEND_COOLDOWN_SECONDS = 60;`r`n    private const MAX_VERIFICATION_ATTEMPTS = 5;
 
     public function sendSignupCode(Request $request)
     {
@@ -408,6 +408,11 @@ class UserController extends Controller
             $localUser->username = $localUser->username ?: $username;
             $localUser->name = $localUser->name ?: ($displayName ?: $localUser->username);
             $localUser->password = $localUser->password ?: Hash::make(Str::random(32));
+            if (empty($supabaseUser['email_confirmed_at']) && empty($supabaseUser['confirmed_at'])) {
+                $this->startOAuthVerification($request, $email, $provider, $supabaseUser);
+                return redirect()->route('oauth.verify.show');
+            }
+
             $localUser->email_verified_at = $localUser->email_verified_at ?: now();
             $localUser->save();
 
@@ -425,6 +430,36 @@ class UserController extends Controller
         }
     }
 
+
+    public function showOAuthVerification(Request $request)
+    {
+        $pending = $request->session()->get('pending_oauth_verification');
+        if (!$pending || now()->gte($pending['expires_at'])) return redirect()->route('home_landing')->withErrors(['login' => 'Verification expired. Please sign in again.']);
+        return view('oauth-verify-email', ['email' => $pending['email'], 'provider' => $pending['provider']]);
+    }
+
+    public function verifyOAuthCode(Request $request)
+    {
+        $request->validate(['code' => ['required', 'digits:6']]);
+        $pending = $request->session()->get('pending_oauth_verification');
+        if (!$pending || now()->gte($pending['expires_at'])) { $request->session()->forget('pending_oauth_verification'); return redirect()->route('home_landing')->withErrors(['login' => 'Verification expired.']); }
+        if (!Hash::check($request->code, $pending['code_hash'])) {
+            $pending['attempts']++;
+            if ($pending['attempts'] >= self::MAX_VERIFICATION_ATTEMPTS) { $request->session()->forget(['pending_oauth_verification','supabase.access_token','supabase.refresh_token']); return redirect()->route('home_landing')->withErrors(['login' => 'Too many incorrect codes.']); }
+            $request->session()->put('pending_oauth_verification', $pending); return back()->withErrors(['code' => 'Incorrect code.']);
+        }
+        $user=$this->resolveLocalUser($pending['email'],$pending['id']); $new=!$user->exists; $user->username=$user->username?:$this->uniqueUsername(Str::slug($pending['name']?:Str::before($pending['email'],'@'),'_')); $user->name=$user->name?:($pending['name']?:$user->username); $user->password=$user->password?:Hash::make(Str::random(32)); $user->email_verified_at=now(); $user->save(); $request->session()->forget('pending_oauth_verification'); $request->session()->regenerate(); Auth::login($user); if($new)$this->sendWelcomeEmail($user,$pending['provider'].'_oauth_signup'); return redirect()->route($user->is_admin?'admin':'customer_home');
+    }
+
+    private function startOAuthVerification(Request $request, string $email, string $provider, array $supabaseUser): void
+    {
+        $code=(string)random_int(100000,999999); $metadata=$supabaseUser['user_metadata']??[]; $request->session()->put('pending_oauth_verification',['email'=>strtolower($email),'provider'=>$provider,'id'=>$supabaseUser['id']??null,'name'=>$metadata['full_name']??$metadata['name']??null,'code_hash'=>Hash::make($code),'expires_at'=>now()->addMinutes(self::SIGNUP_CODE_TTL_MINUTES),'attempts'=>0]); $this->sendVerificationCode($email,$code);
+    }
+
+    private function sendVerificationCode(string $email, string $code): void
+    {
+        $key=config('services.sendgrid.api_key'); if(blank($key)) throw new \RuntimeException('Email verification is unavailable.'); $r=Http::withToken($key)->acceptJson()->post('https://api.sendgrid.com/v3/mail/send',['personalizations'=>[['to'=>[['email'=>$email]]]],'from'=>['email'=>config('mail.from.address'),'name'=>config('mail.from.name')],'subject'=>'Your ADE Garage verification code','content'=>[['type'=>'text/plain','value'=>"Your ADE Garage verification code is {$code}. It expires in 10 minutes."]]]); if(!$r->successful()) throw new \RuntimeException('Unable to send verification email.');
+    }
     private function resolveLocalUser(string $email, ?string $supabaseUserId): User
     {
         $email = strtolower($email);

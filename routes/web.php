@@ -19,6 +19,7 @@ use App\Http\Controllers\MessageController;
 */
 
 Route::get('/', function () {
+    if (auth()->check()) { return redirect()->route(auth()->user()->is_admin ? 'admin' : 'customer_home'); }
     return view('home_landing');
 })->name('login');
 
@@ -33,6 +34,8 @@ Route::post('/login',  [UserController::class, 'login']);
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
 Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->whereIn('provider', ['google', 'facebook']);
 Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');
+Route::get('/auth/verify-email', [UserController::class, 'showOAuthVerification'])->name('oauth.verify.show');
+Route::post('/auth/verify-email', [UserController::class, 'verifyOAuthCode'])->name('oauth.verify');
 
 Route::get('/home_landing', function () {
     return view('home_landing');
@@ -40,7 +43,7 @@ Route::get('/home_landing', function () {
 
 Route::get('/customer_home', function () {
     return view('customer_home');
-})->name('customer_home');
+})->middleware('auth')->name('customer_home');
 
 Route::get('/user', function () {
     return view('user');

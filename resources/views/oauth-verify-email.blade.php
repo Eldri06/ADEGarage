@@ -1,0 +1,1 @@
+<form method="POST" action="{{ route('oauth.verify') }}">@csrf<h1>Verify your email</h1><p>Enter the code sent to {{ $email }}.</p>@error('code')<p>{{ $message }}</p>@enderror<input name="code" inputmode="numeric" maxlength="6" required autofocus><button>Verify and continue</button></form>
