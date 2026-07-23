@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Mail\WelcomeUserMail;
-use App\Mail\SignupVerificationCodeMail;
 use App\Services\SupabaseAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -474,10 +474,47 @@ class UserController extends Controller
         $code = (string) random_int(100000, 999999);
 
         try {
-            Mail::to($email)->send(new SignupVerificationCodeMail($code));
+            $sendGridApiKey = config('services.sendgrid.api_key');
 
-            // Only allow verification after the mail provider accepted the message.
-            // Storing this before sending made failed deliveries appear successful.
+            if (blank($sendGridApiKey)) {
+                throw new \RuntimeException('SendGrid API key is not configured.');
+            }
+
+            // Use SendGrid's HTTPS API rather than SMTP. Railway cannot establish
+            // outbound SMTP connections from this service, while HTTPS is available.
+            $response = Http::acceptJson()
+                ->withToken($sendGridApiKey)
+                ->timeout(15)
+                ->post('https://api.sendgrid.com/v3/mail/send', [
+                    'personalizations' => [[
+                        'to' => [['email' => $email]],
+                    ]],
+                    'from' => [
+                        'email' => config('mail.from.address'),
+                        'name' => config('mail.from.name'),
+                    ],
+                    'subject' => 'Your ADE Garage verification code',
+                    'content' => [
+                        [
+                            'type' => 'text/plain',
+                            'value' => "Your ADE Garage verification code is {$code}. It expires in 10 minutes.",
+                        ],
+                        [
+                            'type' => 'text/html',
+                            'value' => view('emails.signup-verification-code', compact('code'))->render(),
+                        ],
+                    ],
+                ]);
+
+            if (!$response->successful()) {
+                throw new \RuntimeException(sprintf(
+                    'SendGrid API returned HTTP %d: %s',
+                    $response->status(),
+                    $response->body()
+                ));
+            }
+
+            // Only allow verification after SendGrid accepts the message.
             $request->session()->put('pending_signup_email', [
                 'email' => $email,
                 'code_hash' => Hash::make($code),

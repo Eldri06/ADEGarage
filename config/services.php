@@ -19,6 +19,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'sendgrid' => [
+        'api_key' => env('SENDGRID_API_KEY'),
+    ],
+
     'supabase' => [
         'url'              => env('SUPABASE_URL'),
         'anon_key'         => env('SUPABASE_ANON_KEY'),
