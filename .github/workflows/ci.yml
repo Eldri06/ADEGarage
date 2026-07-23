@@ -15,7 +15,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          # Keep CI aligned with the Railway Docker image and composer.lock.
+          php-version: '8.4'
           coverage: none
       - uses: actions/setup-node@v4
         with:
