@@ -18,7 +18,7 @@ jobs:
           # Keep CI aligned with the Railway Docker image and composer.lock.
           php-version: '8.4'
           coverage: none
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
