@@ -32,7 +32,7 @@ class ProfileController extends Controller
             'last_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:500'],
-            'profilepicture' => ['nullable', 'image', 'max:5120'],
+            'profilepicture' => ['nullable', 'file', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
         ]);
 
         $updateData = [

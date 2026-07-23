@@ -25,7 +25,7 @@ class ProductController extends Controller
                 'brand'       => 'required|string',
                 'price'       => 'required|numeric|min:0',
                 'stock'       => 'required|integer|min:0',
-                'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+                'image'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
                 'models'      => 'nullable|array',
                 'variations'  => 'nullable|string',
                 'specifications' => 'nullable|string',
@@ -56,7 +56,7 @@ class ProductController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error creating product: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Unable to create product. Please try again.'], 500);
         }
     }
 
@@ -78,7 +78,7 @@ class ProductController extends Controller
                 'brand'       => 'required|string',
                 'price'       => 'required|numeric|min:0',
                 'stock'       => 'required|integer|min:0',
-                'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+                'image'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
                 'models'      => 'nullable|array',
                 'variations'  => 'nullable|string',
                 'specifications' => 'nullable|string',
@@ -113,7 +113,7 @@ class ProductController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error updating product: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Unable to update product. Please try again.'], 500);
         }
     }
 
@@ -132,7 +132,7 @@ class ProductController extends Controller
             return response()->json(['success' => true, 'message' => 'Product deleted successfully']);
 
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error deleting product: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Unable to delete product. Please try again.'], 500);
         }
     }
 

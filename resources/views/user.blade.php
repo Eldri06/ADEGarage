@@ -276,6 +276,12 @@
       }
     }
     
+    function escapeOrderHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function displayOrders(orders) {
       const grid = document.getElementById('ordersGrid');
       
@@ -286,7 +292,8 @@
       
       grid.innerHTML = orders.map(order => {
         const firstItem = order.items[0];
-        const imageUrl = firstItem.product_image ? `/storage/${firstItem.product_image}` : '/images/products/placeholder.png';
+        const imagePath = String(firstItem.product_image || '');
+        const imageUrl = imagePath && !imagePath.includes('..') ? `/storage/${encodeURI(imagePath)}` : '/images/products/placeholder.png';
         const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
         
         // Map status to tab names
@@ -335,7 +342,7 @@
             <div class="order-details">
               <div class="thumb" style="background-image: url('${imageUrl}'); background-size: cover; background-position: center;"></div>
               <div class="info">
-                <h3 class="product-name">${firstItem.product_name}</h3>
+                <h3 class="product-name">${escapeOrderHtml(firstItem.product_name)}</h3>
                 <p class="price">₱${parseFloat(order.total).toLocaleString()}</p>
                 <p class="qty">Qty: ${totalItems}${order.items.length > 1 ? ' (+' + (order.items.length - 1) + ' more)' : ''}</p>
               </div>

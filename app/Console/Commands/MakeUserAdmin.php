@@ -26,6 +26,7 @@ class MakeUserAdmin extends Command
         }
 
         $user->is_admin = true;
+        $user->role = 'admin';
         $user->save();
 
         $this->info("User '{$user->email}' (ID: {$user->id}) is now an admin.");

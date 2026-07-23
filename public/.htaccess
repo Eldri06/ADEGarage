@@ -5,6 +5,10 @@
 
     RewriteEngine On
 
+    # Never serve dotfiles, environment files, or database/archive artifacts.
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule \.(?:bak|dump|sql|sqlite|zip|tar|gz)$ - [F,L,NC]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

@@ -51,6 +51,20 @@ class AdminSettingsController extends Controller
 
     public function update(Request $request)
     {
+        $request->validate([
+            'store_info' => ['sometimes', 'array'],
+            'store_info.storeName' => ['sometimes', 'string', 'max:255'],
+            'store_info.storeEmail' => ['sometimes', 'email', 'max:255'],
+            'store_info.storePhone' => ['sometimes', 'string', 'max:30'],
+            'store_info.storeAddress' => ['sometimes', 'string', 'max:500'],
+            'store_info.storeLocation' => ['sometimes', 'string', 'max:255'],
+            'notification_settings' => ['sometimes', 'array'],
+            'notification_settings.*' => ['boolean'],
+            'business_hours' => ['sometimes', 'array'],
+            'business_hours.openingTime' => ['sometimes', 'date_format:H:i'],
+            'business_hours.closingTime' => ['sometimes', 'date_format:H:i'],
+            'business_hours.weekendOpen' => ['sometimes', 'boolean'],
+        ]);
         $validSections = ['store_info', 'notification_settings', 'business_hours'];
 
         foreach ($validSections as $section) {

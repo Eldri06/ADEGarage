@@ -31,6 +31,7 @@ class User extends Authenticatable
         'provider',
         'provider_id',
         'provider_token',
+        'role',
     ];
 
     /**
@@ -59,7 +60,11 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return (bool) $this->is_admin || $this->id === 1;
+        return $this->hasRole('admin');
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role;
     }
 }
-

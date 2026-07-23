@@ -143,7 +143,7 @@ class SupabaseAuthService
      */
     public function uploadProductImage(\Illuminate\Http\UploadedFile $file): string
     {
-        $filename  = uniqid('product_', true) . '.' . $file->getClientOriginalExtension();
+        $filename  = uniqid('product_', true) . '.' . $this->safeImageExtension($file);
         $bucket    = $this->getProductImagesBucket();
         $endpoint  = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
@@ -215,7 +215,7 @@ class SupabaseAuthService
 
     public function uploadProfileImage(\Illuminate\Http\UploadedFile $file): string
     {
-        $filename  = uniqid('profile_', true) . '.' . $file->getClientOriginalExtension();
+        $filename  = uniqid('profile_', true) . '.' . $this->safeImageExtension($file);
         $bucket    = 'profile-images';
         return $this->uploadFile($bucket, $file->getRealPath(), $filename, $file->getMimeType());
     }
@@ -238,6 +238,16 @@ class SupabaseAuthService
     private function getPublicUrlFromBucket(string $bucket, string $filename): string
     {
         return $this->url . '/storage/v1/object/public/' . $bucket . '/' . $filename;
+    }
+
+    private function safeImageExtension(\Illuminate\Http\UploadedFile $file): string
+    {
+        return [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+        ][$file->getMimeType()] ?? throw new \RuntimeException('Unsupported image type.');
     }
 
     private function getPublicUrl(string $filename): string

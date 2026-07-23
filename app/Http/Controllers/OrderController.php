@@ -135,7 +135,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error placing order: ' . $e->getMessage()
+                'message' => 'Unable to place the order. Please try again.'
             ], 500);
         }
     }
@@ -193,7 +193,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching orders: ' . $e->getMessage()
+                'message' => 'Unable to fetch orders. Please try again.'
             ], 500);
         }
     }
@@ -251,7 +251,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching orders: ' . $e->getMessage()
+                'message' => 'Unable to fetch orders. Please try again.'
             ], 500);
         }
     }
@@ -291,7 +291,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error cancelling order: ' . $e->getMessage()
+                'message' => 'Unable to cancel the order. Please try again.'
             ], 500);
         }
     }
@@ -319,7 +319,7 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating order: ' . $e->getMessage()
+                'message' => 'Unable to update the order. Please try again.'
             ], 500);
         }
     }

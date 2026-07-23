@@ -51,6 +51,7 @@ class CreateAdminAccount extends Command
             // Scramble the local password since Supabase handles true authentication
             $user->password = bcrypt(Str::random(32)); 
             $user->is_admin = true;
+            $user->role = 'admin';
             $user->save();
 
             $this->newLine();
@@ -63,6 +64,7 @@ class CreateAdminAccount extends Command
                 $user = User::where('email', $email)->first();
                 if ($user) {
                     $user->is_admin = true;
+                    $user->role = 'admin';
                     $user->save();
                     $this->info("✅ User already existed in Supabase. We secured their local profile and promoted them to Master Admin.");
                 } else {

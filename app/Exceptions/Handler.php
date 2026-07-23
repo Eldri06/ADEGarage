@@ -3,6 +3,8 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -44,7 +46,14 @@ class Handler extends ExceptionHandler
     public function register()
     {
         $this->reportable(function (Throwable $e) {
-            //
+            if (!($e instanceof HttpExceptionInterface) || $e->getStatusCode() >= 500) {
+                Log::critical('Unhandled application exception', [
+                    'exception' => get_class($e),
+                    'message' => $e->getMessage(),
+                    'url' => request()->fullUrl(),
+                    'user_id' => optional(request()->user())->id,
+                ]);
+            }
         });
     }
 }

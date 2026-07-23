@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -76,6 +77,9 @@ class AdminController extends Controller
         // Sort
         $sortBy = $request->get('sort', 'created_at');
         $sortOrder = $request->get('order', 'desc');
+        $allowedSorts = ['created_at', 'updated_at', 'username', 'email'];
+        $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'created_at';
+        $sortOrder = in_array(strtolower($sortOrder), ['asc', 'desc'], true) ? $sortOrder : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
         $users = $query->paginate(20);
@@ -106,8 +110,8 @@ class AdminController extends Controller
         $user = User::findOrFail($id);
         
         $request->validate([
-            'username' => 'required|string|max:255|unique:users,username,' . $id,
-            'email' => 'required|email|max:255|unique:users,email,' . $id,
+            'username' => ['required', 'string', 'max:255', Rule::unique('users', 'username')->ignore($user)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
         ]);
 
         $user->update([

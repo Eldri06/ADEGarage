@@ -2,6 +2,17 @@
 let cartData = [];
 let cartLoadPromise = null;
 
+function escapeCartHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function cartImageUrl(value) {
+  const path = String(value ?? '');
+  return path && !path.includes('..') ? `/storage/${encodeURI(path)}` : '/images/products/placeholder.png';
+}
+
 // Load cart on page load
 document.addEventListener('DOMContentLoaded', () => {
   loadCart();
@@ -239,18 +250,18 @@ window.updateCartDisplayFromDB = function updateCartDisplayFromDB() {
 
   // Render cart items
   cartItemsContainer.innerHTML = cartData.map(item => {
-    const imageUrl = item.product_image ? `/storage/${item.product_image}` : '/images/products/placeholder.png';
+    const imageUrl = cartImageUrl(item.product_image);
     
     return `
       <div class="cart-item" data-item-id="${item.id}">
         <div class="item-image">
-          <img src="${imageUrl}" alt="${item.product_name}">
+          <img src="${imageUrl}" alt="${escapeCartHtml(item.product_name)}">
         </div>
         <div class="item-details">
-          <div class="item-name">${item.product_name}</div>
+          <div class="item-name">${escapeCartHtml(item.product_name)}</div>
           <div class="item-price">₱${parseFloat(item.price).toLocaleString()}</div>
           <div class="item-variations">
-            Brand: ${item.product_brand} | Category: ${capitalizeFirst(item.product_category)}
+            Brand: ${escapeCartHtml(item.product_brand)} | Category: ${escapeCartHtml(capitalizeFirst(item.product_category))}
           </div>
         </div>
         <div class="item-controls">

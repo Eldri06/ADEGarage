@@ -120,7 +120,7 @@ class CartController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error adding to cart: ' . $e->getMessage()
+                'message' => 'Unable to add the item. Please try again.'
             ], 500);
         }
     }
@@ -158,7 +158,7 @@ class CartController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating cart: ' . $e->getMessage()
+                'message' => 'Unable to update the cart. Please try again.'
             ], 500);
         }
     }
@@ -181,7 +181,7 @@ class CartController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error removing item: ' . $e->getMessage()
+                'message' => 'Unable to remove the item. Please try again.'
             ], 500);
         }
     }
@@ -203,7 +203,7 @@ class CartController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error clearing cart: ' . $e->getMessage()
+                'message' => 'Unable to clear the cart. Please try again.'
             ], 500);
         }
     }

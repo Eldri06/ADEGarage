@@ -31,6 +31,17 @@ class UserSettingsController extends Controller
     public function update(Request $request)
     {
         $user = Auth::user();
+        $validated = $request->validate([
+            'language' => ['sometimes', 'string', 'max:10'],
+            'region' => ['sometimes', 'string', 'max:10'],
+            'emailNotif' => ['sometimes', 'boolean'],
+            'pushNotif' => ['sometimes', 'boolean'],
+            'smsNotif' => ['sometimes', 'boolean'],
+            'soundEffects' => ['sometimes', 'boolean'],
+            'volume' => ['sometimes', 'integer', 'between:0,100'],
+            'twoFA' => ['sometimes', 'boolean'],
+            'profileVisibility' => ['sometimes', 'in:public,private'],
+        ]);
         $allowed = [
             'language', 'region', 'emailNotif', 'pushNotif', 'smsNotif',
             'soundEffects', 'volume', 'twoFA', 'profileVisibility',
@@ -42,8 +53,8 @@ class UserSettingsController extends Controller
         }
 
         foreach ($allowed as $key) {
-            if ($request->has($key)) {
-                $settings[$key] = $request->input($key);
+            if (array_key_exists($key, $validated)) {
+                $settings[$key] = $validated[$key];
             }
         }
 
