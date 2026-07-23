@@ -23,19 +23,17 @@ Route::get('/', function () {
     return view('home_landing');
 })->name('login');
 
-Route::middleware('throttle:auth')->group(function () {
-Route::post('/signup/send-code', [UserController::class, 'sendSignupCode'])->name('signup.code.send');
-Route::post('/signup', [UserController::class, 'signup']);
-Route::post('/signup/verify', [UserController::class, 'verifySignupCode'])->name('signup.verify');
-Route::post('/signup/resend', [UserController::class, 'resendSignupCode'])->name('signup.resend');
-Route::post('/password/email', [UserController::class, 'forgotPassword'])->name('password.email');
-Route::post('/login',  [UserController::class, 'login']);
-});
+Route::post('/signup/send-code', [UserController::class, 'sendSignupCode'])->middleware('throttle:signup-send-code')->name('signup.code.send');
+Route::post('/signup', [UserController::class, 'signup'])->middleware('throttle:signup-verify');
+Route::post('/signup/verify', [UserController::class, 'verifySignupCode'])->middleware('throttle:signup-verify')->name('signup.verify');
+Route::post('/signup/resend', [UserController::class, 'resendSignupCode'])->middleware('throttle:signup-resend')->name('signup.resend');
+Route::post('/password/email', [UserController::class, 'forgotPassword'])->middleware('throttle:password-reset')->name('password.email');
+Route::post('/login',  [UserController::class, 'login'])->middleware('throttle:login');
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
-Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->whereIn('provider', ['google', 'facebook']);
-Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');
+Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook']);
+Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');
 Route::get('/auth/verify-email', [UserController::class, 'showOAuthVerification'])->name('oauth.verify.show');
-Route::post('/auth/verify-email', [UserController::class, 'verifyOAuthCode'])->name('oauth.verify');
+Route::post('/auth/verify-email', [UserController::class, 'verifyOAuthCode'])->middleware('throttle:oauth-verify')->name('oauth.verify');
 
 Route::get('/home_landing', function () {
     return view('home_landing');

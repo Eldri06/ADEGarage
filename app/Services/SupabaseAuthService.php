@@ -143,7 +143,7 @@ class SupabaseAuthService
      */
     public function uploadProductImage(\Illuminate\Http\UploadedFile $file): string
     {
-        $filename  = uniqid('product_', true) . '.' . $this->safeImageExtension($file);
+        $filename  = $this->generatedImageFilename('product', $file);
         $bucket    = $this->getProductImagesBucket();
         $endpoint  = $this->url . '/storage/v1/object/' . $bucket . '/' . $filename;
 
@@ -215,7 +215,7 @@ class SupabaseAuthService
 
     public function uploadProfileImage(\Illuminate\Http\UploadedFile $file): string
     {
-        $filename  = uniqid('profile_', true) . '.' . $this->safeImageExtension($file);
+        $filename  = $this->generatedImageFilename('profile', $file);
         $bucket    = 'profile-images';
         return $this->uploadFile($bucket, $file->getRealPath(), $filename, $file->getMimeType());
     }
@@ -240,14 +240,21 @@ class SupabaseAuthService
         return $this->url . '/storage/v1/object/public/' . $bucket . '/' . $filename;
     }
 
-    private function safeImageExtension(\Illuminate\Http\UploadedFile $file): string
+    private function generatedImageFilename(string $prefix, \Illuminate\Http\UploadedFile $file): string
     {
-        return [
+        $extensions = [
             'image/jpeg' => 'jpg',
             'image/png' => 'png',
             'image/gif' => 'gif',
             'image/webp' => 'webp',
-        ][$file->getMimeType()] ?? throw new \RuntimeException('Unsupported image type.');
+        ];
+        $extension = $extensions[$file->getMimeType()] ?? null;
+
+        if ($extension === null) {
+            throw new \InvalidArgumentException('Unsupported image type.');
+        }
+
+        return $prefix . '_' . bin2hex(random_bytes(16)) . '.' . $extension;
     }
 
     private function getPublicUrl(string $filename): string

@@ -49,8 +49,24 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
-        RateLimiter::for('auth', function (Request $request) {
-            return Limit::perMinute(5)->by(strtolower((string) $request->input('email', $request->ip())).'|'.$request->ip());
-        });
+        // Limit both the client and submitted identity to deter distributed guessing.
+        RateLimiter::for('login', fn (Request $request) => $this->identityLimits($request, 5));
+        RateLimiter::for('signup-send-code', fn (Request $request) => $this->identityLimits($request, 3));
+        RateLimiter::for('signup-verify', fn (Request $request) => $this->identityLimits($request, 5));
+        RateLimiter::for('signup-resend', fn (Request $request) => $this->identityLimits($request, 3));
+        RateLimiter::for('password-reset', fn (Request $request) => $this->identityLimits($request, 3));
+        RateLimiter::for('oauth-verify', fn (Request $request) => $this->identityLimits($request, 5));
+        RateLimiter::for('oauth', fn (Request $request) => Limit::perMinute(10)->by('oauth-ip:' . $request->ip()));
+    }
+
+    /** @return array<int, Limit> */
+    private function identityLimits(Request $request, int $perMinute): array
+    {
+        $email = strtolower(trim((string) $request->input('email', 'unknown')));
+
+        return [
+            Limit::perMinute($perMinute)->by('auth-ip:' . $request->ip()),
+            Limit::perMinute($perMinute)->by('auth-email:' . $email),
+        ];
     }
 }
