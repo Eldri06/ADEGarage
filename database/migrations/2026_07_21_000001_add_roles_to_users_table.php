@@ -9,9 +9,11 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('role', 32)->default('customer')->index();
-        });
+        if (!Schema::hasColumn('users', 'role')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('role', 32)->default('customer')->index();
+            });
+        }
 
         // Preserve explicitly configured legacy administrators; no ID-based privilege is retained.
         DB::table('users')->where('is_admin', true)->update(['role' => 'admin']);
@@ -19,9 +21,11 @@ return new class extends Migration
 
     public function down()
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropIndex(['role']);
-            $table->dropColumn('role');
-        });
+        if (Schema::hasColumn('users', 'role')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropIndex(['role']);
+                $table->dropColumn('role');
+            });
+        }
     }
 };
