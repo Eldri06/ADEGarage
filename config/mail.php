@@ -46,7 +46,9 @@ return [
             'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             'username' => env('MAIL_USERNAME'),
             'password' => $smtpPassword,
-            'timeout' => null,
+            // Avoid keeping a web request open for minutes when the SMTP provider
+            // is unavailable. This can be overridden per environment if needed.
+            'timeout' => (int) env('MAIL_TIMEOUT', 15),
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
 

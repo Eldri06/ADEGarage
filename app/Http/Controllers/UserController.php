@@ -473,29 +473,27 @@ class UserController extends Controller
     {
         $code = (string) random_int(100000, 999999);
 
-        $request->session()->put('pending_signup_email', [
-            'email' => $email,
-            'code_hash' => Hash::make($code),
-            'expires_at' => now()->addMinutes(self::SIGNUP_CODE_TTL_MINUTES),
-            'resend_available_at' => now()->addSeconds(self::SIGNUP_RESEND_COOLDOWN_SECONDS),
-            'verified_at' => null,
-        ]);
-
         try {
             Mail::to($email)->send(new SignupVerificationCodeMail($code));
+
+            // Only allow verification after the mail provider accepted the message.
+            // Storing this before sending made failed deliveries appear successful.
+            $request->session()->put('pending_signup_email', [
+                'email' => $email,
+                'code_hash' => Hash::make($code),
+                'expires_at' => now()->addMinutes(self::SIGNUP_CODE_TTL_MINUTES),
+                'resend_available_at' => now()->addSeconds(self::SIGNUP_RESEND_COOLDOWN_SECONDS),
+                'verified_at' => null,
+            ]);
+
             Log::info('Signup verification code sent.', ['email' => $email]);
         } catch (\Throwable $e) {
-            Log::warning('Signup verification code email delivery failed, but code stored in session.', [
+            Log::warning('Signup verification code email delivery failed.', [
                 'email' => $email,
                 'error' => $e->getMessage(),
             ]);
 
-            if (config('app.debug')) {
-                Log::warning('Verification code for debugging', [
-                    'email' => $email,
-                    'code' => $code,
-                ]);
-            }
+            throw $e;
         }
     }
 
