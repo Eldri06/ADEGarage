@@ -157,6 +157,15 @@
     </div>
   </div>
 </section>
+
+@if (config('ctf.enabled'))
+  <footer class="py-4 text-center border-top border-info border-opacity-25">
+    <a href="{{ route('ctf.legacy.show') }}" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-shield-lock"></i> Classroom CTF: Legacy Login
+    </a>
+  </footer>
+@endif
+
   <div
     id="authModalBackdrop"
     class="modal-backdrop-custom mb-hidden"

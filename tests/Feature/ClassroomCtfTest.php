@@ -37,4 +37,13 @@ class ClassroomCtfTest extends TestCase
 
         $this->assertGuest();
     }
+
+    public function test_homepage_shows_ctf_link_only_while_ctf_mode_is_enabled(): void
+    {
+        config()->set('ctf.enabled', false);
+        $this->get('/')->assertDontSee('Classroom CTF: Legacy Login');
+
+        config()->set('ctf.enabled', true);
+        $this->get('/')->assertSee('Classroom CTF: Legacy Login');
+    }
 }
