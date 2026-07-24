@@ -6,7 +6,10 @@
   <title>ADEGarage Classroom CTF</title>
   <style>
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #10131a; color: #edf2f7; font: 16px/1.5 system-ui, sans-serif; }
-    main { width: min(430px, calc(100% - 32px)); padding: 32px; border: 1px solid #394150; border-radius: 14px; background: #1b202b; box-shadow: 0 18px 45px #0008; }
+    @if (is_file(public_path('images/ctf/legacy-login-bg.jpg')))
+    body { background: linear-gradient(#10131acc, #10131acc), url('{{ asset('images/ctf/legacy-login-bg.jpg') }}') center / cover fixed no-repeat; }
+    @endif
+    main { width: min(430px, calc(100% - 32px)); padding: 32px; border: 1px solid #394150; border-radius: 14px; background: #1b202bea; box-shadow: 0 18px 45px #0008; }
     h1 { margin-top: 0; color: #ff9d38; } label, input { display: block; width: 100%; box-sizing: border-box; } label { margin-top: 16px; } input { margin-top: 6px; padding: 10px; border: 1px solid #556074; border-radius: 7px; background: #10131a; color: inherit; }
     button { margin-top: 22px; width: 100%; padding: 11px; border: 0; border-radius: 7px; background: #ff8c24; color: #16110a; font-weight: 700; cursor: pointer; } .notice { padding: 10px; border-radius: 7px; background: #283243; } .error { color: #ff9fa6; } code { color: #a8e6cf; }
   </style>
