@@ -11,6 +11,7 @@ use App\Http\Controllers\SalesAnalyticsController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\ClassroomCtfController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,6 +31,11 @@ Route::post('/signup/resend', [UserController::class, 'resendSignupCode'])->midd
 Route::post('/password/email', [UserController::class, 'forgotPassword'])->middleware('throttle:password-reset')->name('password.email');
 Route::post('/login',  [UserController::class, 'login'])->middleware('throttle:login');
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
+
+// Isolated, opt-in classroom exercise. It cannot create an ADEGarage session.
+Route::get('/ctf/legacy-login', [ClassroomCtfController::class, 'show'])->name('ctf.legacy.show');
+Route::post('/ctf/legacy-login', [ClassroomCtfController::class, 'login'])->middleware('throttle:login')->name('ctf.legacy.login');
+Route::post('/ctf/legacy-login/reset', [ClassroomCtfController::class, 'logout'])->name('ctf.legacy.logout');
 Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook']);
 Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');
 Route::get('/auth/verify-email', [UserController::class, 'showOAuthVerification'])->name('oauth.verify.show');
