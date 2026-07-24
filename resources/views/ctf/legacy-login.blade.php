@@ -13,7 +13,7 @@
 </head>
 <body>
   <main>
-    <!-- Migration note: Our 1949 Honda Dream data was imported under the legacy account. -->
+    <!-- Migration note: legacy@adegarage.ctf imported the 1949 Honda Dream records. -->
     <p class="notice">Authorized classroom CTF target only. This is a fake account and never grants ADEGarage access.</p>
     <h1>Legacy Garage Login</h1>
 
