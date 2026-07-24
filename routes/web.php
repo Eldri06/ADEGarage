@@ -35,6 +35,7 @@ Route::post('/logout', [UserController::class, 'logout'])->name('logout');
 // Isolated, opt-in classroom exercise. It cannot create an ADEGarage session.
 Route::get('/ctf/legacy-login', [ClassroomCtfController::class, 'show'])->name('ctf.legacy.show');
 Route::post('/ctf/legacy-login', [ClassroomCtfController::class, 'login'])->middleware('throttle:login')->name('ctf.legacy.login');
+Route::get('/ctf/legacy-admin', [ClassroomCtfController::class, 'admin'])->name('ctf.legacy.admin');
 Route::post('/ctf/legacy-login/reset', [ClassroomCtfController::class, 'logout'])->name('ctf.legacy.logout');
 Route::get('/auth/{provider}', [UserController::class, 'redirectToProvider'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook']);
 Route::get('/auth/{provider}/callback', [UserController::class, 'handleProviderCallback'])->middleware('throttle:oauth')->whereIn('provider', ['google', 'facebook'])->name('oauth.callback');

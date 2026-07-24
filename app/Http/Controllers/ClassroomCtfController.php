@@ -13,10 +13,11 @@ class ClassroomCtfController extends Controller
     {
         $this->ensureEnabled();
 
-        return view('ctf.legacy-login', [
-            'solved' => (bool) $request->session()->get(self::SESSION_KEY, false),
-            'flag' => config('ctf.flag'),
-        ]);
+        if ($request->session()->get(self::SESSION_KEY, false)) {
+            return redirect()->route('ctf.legacy.admin');
+        }
+
+        return view('ctf.legacy-login');
     }
 
     public function login(Request $request)
@@ -46,7 +47,18 @@ class ClassroomCtfController extends Controller
         $request->session()->regenerate();
         $request->session()->put(self::SESSION_KEY, true);
 
-        return redirect()->route('ctf.legacy.show');
+        return redirect()->route('ctf.legacy.admin');
+    }
+
+    public function admin(Request $request)
+    {
+        $this->ensureEnabled();
+
+        if (! $request->session()->get(self::SESSION_KEY, false)) {
+            return redirect()->route('ctf.legacy.show');
+        }
+
+        return view('ctf.legacy-admin', ['flag' => config('ctf.flag')]);
     }
 
     public function logout(Request $request)

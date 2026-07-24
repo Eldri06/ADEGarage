@@ -29,9 +29,9 @@ class ClassroomCtfTest extends TestCase
         $this->post('/ctf/legacy-login', [
             'email' => 'legacy@adegarage.ctf',
             'password' => 'honda-dream-1949',
-        ])->assertRedirect(route('ctf.legacy.show'));
+        ])->assertRedirect(route('ctf.legacy.admin'));
 
-        $this->get('/ctf/legacy-login')
+        $this->get('/ctf/legacy-admin')
             ->assertOk()
             ->assertSee('CTF{legacy_auth_complete}');
 
@@ -45,5 +45,13 @@ class ClassroomCtfTest extends TestCase
 
         config()->set('ctf.enabled', true);
         $this->get('/')->assertSee('Classroom CTF: Legacy Login');
+    }
+
+    public function test_mock_ctf_admin_requires_the_separate_ctf_session(): void
+    {
+        config()->set('ctf.enabled', true);
+
+        $this->get('/ctf/legacy-admin')
+            ->assertRedirect(route('ctf.legacy.show'));
     }
 }

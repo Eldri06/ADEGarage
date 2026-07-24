@@ -19,19 +19,13 @@
     <!-- Migration note: legacy@adegarage.ctf imported the 1949 Honda Dream records. -->
     <p class="notice">oh mao nani xD</h1>
 
-    @if ($solved)
-      <p>Challenge solved. Submit this flag:</p>
-      <p><code>{{ $flag }}</code></p>
-      <form method="POST" action="{{ route('ctf.legacy.logout') }}">@csrf<button type="submit">Reset challenge</button></form>
-    @else
-      @if ($errors->has('ctf_login'))<p class="error">{{ $errors->first('ctf_login') }}</p>@endif
-      <form method="POST" action="{{ route('ctf.legacy.login') }}" autocomplete="off">
-        @csrf
-        <label>Email <input name="email" type="email" value="{{ old('email') }}" required></label>
-        <label>Password <input name="password" type="password" required></label>
-        <button type="submit">Access legacy records</button>
-      </form>
-    @endif
+    @if ($errors->has('ctf_login'))<p class="error">{{ $errors->first('ctf_login') }}</p>@endif
+    <form method="POST" action="{{ route('ctf.legacy.login') }}" autocomplete="off">
+      @csrf
+      <label>Email <input name="email" type="email" value="{{ old('email') }}" required></label>
+      <label>Password <input name="password" type="password" required></label>
+      <button type="submit">Access legacy records</button>
+    </form>
   </main>
 </body>
 </html>
